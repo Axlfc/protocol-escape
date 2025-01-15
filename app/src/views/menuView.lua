@@ -1,6 +1,7 @@
 -- app/src/views/menuView.lua
 local menuView = {}
 
+-- Function to render the menu
 function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overlay)
     if overlay then
         pass:setColor(unpack(backgroundColor))
@@ -16,6 +17,11 @@ function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overl
         pass:setColor(isSelected and {1, 1, 0} or {1, 1, 1})
         pass:text(option, 0, y, -2, 0.2)
     end
+end
+
+-- Function to notify the controller when an option is selected
+function menuView.notifyOptionSelected(controller, option)
+    controller.handleOptionSelected(option)
 end
 
 return menuView
