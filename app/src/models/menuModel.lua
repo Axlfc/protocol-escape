@@ -26,10 +26,26 @@ end
 function menuModel.createGameScene()
     return {
         blockMovement = false,
-        mouseHovering = false,  -- Track mouse hover state
+        mouseHovering = false,
+        
+        load = function(self, messages)
+            print("[GameScene] Loading game scene")
+            
+            -- Ensure messages is a table
+            messages = messages or {}
+
+            -- Process any incoming messages
+            for _, msg in ipairs(messages) do
+                if msg.type == "game_start" then
+                    print(string.format("[GameScene] Starting new game with difficulty: %s", msg.config.difficulty))
+                end
+            end
+        end,
+        
         update = function(self, dt)
             -- Game update logic here
         end,
+        
         draw = function(self, pass)
             if not pass then
                 error("Pass is nil. Ensure the draw method is called with a valid pass object.")
@@ -37,6 +53,19 @@ function menuModel.createGameScene()
             -- Game rendering logic
             pass:setColor(1, 1, 1)
             pass:cube(0, 1.7, -3, 0.5)  -- Example game object
+        end,
+        
+        unload = function(self)
+            print("[GameScene] Unloading game scene")
+            -- Save any necessary state here
+            sceneManager.postMessage({
+                type = "game_unload",
+                timestamp = os.time(),
+                saveData = {
+                    -- Add any relevant save data here
+                    lastPosition = {x = 0, y = 1.7, z = -3}
+                }
+            })
         end
     }
 end
