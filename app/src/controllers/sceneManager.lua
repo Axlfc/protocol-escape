@@ -5,14 +5,29 @@ local menuController = require 'app.src.controllers.menuController'
 local sceneManager = {
     scenes = {},
     currentScene = nil,
-    previousScene = nil,  -- Track previous scene for returning from pause
-    gameState = {}  -- Store persistent game state
+    previousScene = nil,
+    gameState = {},
+    messageQueue = {}  -- Store messages for inter-scene communication
 }
+
+
+function sceneManager.postMessage(message)
+    table.insert(sceneManager.messageQueue, message)
+end
+
+
+function sceneManager.pollMessages()
+    local messages = sceneManager.messageQueue
+    sceneManager.messageQueue = {}  -- Clear the message queue after polling
+    return messages
+end
+
 
 function sceneManager.addScene(name, scene)
     scene.name = name  -- Add name property to scene
     sceneManager.scenes[name] = scene
 end
+
 
 function sceneManager.switchScene(name, preserveState)
     if sceneManager.currentScene then
@@ -23,12 +38,14 @@ function sceneManager.switchScene(name, preserveState)
             sceneManager.currentScene.unload()
         end
     end
-    
+
     sceneManager.currentScene = sceneManager.scenes[name]
+    
     if sceneManager.currentScene and sceneManager.currentScene.load then
-        sceneManager.currentScene.load()
+        sceneManager.currentScene.load(sceneManager.pollMessages())
     end
 end
+
 
 function sceneManager.returnToPreviousScene()
     if sceneManager.previousScene then
@@ -36,21 +53,25 @@ function sceneManager.returnToPreviousScene()
     end
 end
 
+
 function sceneManager.saveGameState(state)
     for k, v in pairs(state) do
         sceneManager.gameState[k] = v
     end
 end
 
+
 function sceneManager.getGameState()
     return sceneManager.gameState
 end
+
 
 function sceneManager.update(dt)
     if sceneManager.currentScene and sceneManager.currentScene.update then
         sceneManager.currentScene.update(dt)
     end
 end
+
 
 function sceneManager.draw(pass)
     if not pass then
