@@ -1,1 +1,11 @@
 .vs
+
+lovr.exe
+lovrc.bat
+enet.dll
+glfw3.dll
+http.dll
+luajit.dll
+msdfgen.dll
+ode.dll
+openxr_loader.dll
