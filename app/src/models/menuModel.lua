@@ -33,7 +33,7 @@ function menuModel.createPauseMenu()
         selectedOption = 1,
         options = { "Resume", "Save", "Back to Main Menu", "Quit" },
         backgroundColor = { 0, 0, 0, .8 },
-        overlay = true,
+        overlay = false,
         draw = function(self, pass)
             menuView.drawMenu(
                 pass,
