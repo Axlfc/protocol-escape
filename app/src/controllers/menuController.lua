@@ -10,17 +10,16 @@ function menuController.handleInput(key, scene, sceneManager)
         elseif scene.name == 'pauseMenu' then
             sceneManager.clearOverlayScene()
         end
-        return  -- Return here to prevent processing other inputs when toggling pause
+        return  -- Stop further input processing
     end
 
     if not scene.options then return end
 
+    -- Normal input handling for menu navigation
     if key == 'down' then
         scene.selectedOption = (scene.selectedOption % #scene.options) + 1
-        scene.mouseHovering = false
     elseif key == 'up' then
         scene.selectedOption = (scene.selectedOption - 2) % #scene.options + 1
-        scene.mouseHovering = false
     elseif key == 'return' then
         local selectedOption = scene.options[scene.selectedOption]
         menuController.handleOptionSelected(selectedOption, scene, sceneManager)

@@ -18,7 +18,10 @@ function lovr.update(dt)
 end
 
 function lovr.keypressed(key)
-    sceneManager.handleInput(key)
+    local activeScene = sceneManager.getCurrentActiveScene()
+    if activeScene then
+        menuController.handleInput(key, activeScene, sceneManager)
+    end
 end
 
 function lovr.draw(pass)

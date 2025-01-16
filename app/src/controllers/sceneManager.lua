@@ -120,7 +120,13 @@ function sceneManager.getGameState()
 end
 
 function sceneManager.update(dt)
-    if sceneManager.currentScene and sceneManager.currentScene.update then
+    if sceneManager.overlayScene then
+        -- Only update the overlay scene
+        if sceneManager.overlayScene.update then
+            sceneManager.overlayScene.update(dt)
+        end
+    elseif sceneManager.currentScene and sceneManager.currentScene.update then
+        -- Update the current game scene if no overlay is active
         sceneManager.currentScene.update(dt)
     end
 end
