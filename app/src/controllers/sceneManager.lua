@@ -6,9 +6,10 @@ local sceneManager = {
     scenes = {},
     currentScene = nil,
     previousScene = nil,
+    overlayScene = nil,  -- Store the current overlay scene
     gameState = {},
-    messageQueue = {},  -- Store messages for inter-scene communication
-    debug = true  -- Toggle debug printing
+    messageQueue = {},
+    debug = true
 }
 
 -- Grouped logging variables
@@ -124,22 +125,62 @@ function sceneManager.update(dt)
     end
 end
 
+function sceneManager.switchOverlayScene(name)
+    debugPrint(string.format("Activating overlay scene: %s", name))
+    if sceneManager.scenes[name] then
+        -- Clear existing overlay if any
+        if sceneManager.overlayScene and sceneManager.overlayScene.unload then
+            sceneManager.overlayScene.unload()
+        end
+        sceneManager.overlayScene = sceneManager.scenes[name]
+        if sceneManager.overlayScene.load then
+            sceneManager.overlayScene.load()
+        end
+    else
+        debugPrint(string.format("WARNING: Overlay scene '%s' not found!", name))
+    end
+end
+
+function sceneManager.clearOverlayScene()
+    debugPrint("Clearing overlay scene")
+    if sceneManager.overlayScene and sceneManager.overlayScene.unload then
+        sceneManager.overlayScene.unload()
+    end
+    sceneManager.overlayScene = nil
+end
+
+function sceneManager.getCurrentActiveScene()
+    -- Return overlay scene if it exists, otherwise return current scene
+    return sceneManager.overlayScene or sceneManager.currentScene
+end
+
+function sceneManager.isOverlayActive()
+    return sceneManager.overlayScene ~= nil
+end
+
+-- Update main.lua's keypressed function to use this
+function sceneManager.handleInput(key)
+    local activeScene = sceneManager.getCurrentActiveScene()
+    if activeScene then
+        menuController.handleInput(key, activeScene, sceneManager)
+    end
+end
+
 function sceneManager.draw(pass)
     if not pass then
         error("Pass is nil. Ensure LÖVR's draw function is providing a valid pass object.")
     end
 
     if sceneManager.currentScene then
-        if sceneManager.currentScene.options then
-            menuView.drawMenu(
-                pass,
-                sceneManager.currentScene.options,
-                sceneManager.currentScene.selectedOption,
-                sceneManager.currentScene.backgroundColor or {0, 0, 0},
-                sceneManager.currentScene.overlay
-            )
-        elseif sceneManager.currentScene.draw then
+        if sceneManager.currentScene.draw then
             sceneManager.currentScene:draw(pass)
+        end
+    end
+
+    -- Render the overlay scene, if active
+    if sceneManager.overlayScene then
+        if sceneManager.overlayScene.draw then
+            sceneManager.overlayScene:draw(pass)
         end
     end
 end

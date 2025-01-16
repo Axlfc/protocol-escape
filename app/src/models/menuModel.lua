@@ -1,4 +1,5 @@
 -- app/src/models/menuModel.lua
+local menuView = require 'app.src.views.menuView'
 local menuModel = {}
 
 function menuModel.createMainMenu()
@@ -8,18 +9,46 @@ function menuModel.createMainMenu()
         options = { "Start Game", "Options", "Exit" },
         blockMovement = true,
         backgroundColor = { 0, 0, 0 },
-        overlay = false
+        overlay = false,
+        draw = function(self, pass)
+            menuView.drawMenu(
+                pass,
+                self.options,
+                self.selectedOption,
+                self.backgroundColor,
+                self.overlay
+            )
+        end,
+        load = function(self)
+            print("[MainMenu] Loading main menu")
+        end,
+        unload = function(self)
+            print("[MainMenu] Unloading main menu")
+        end
     }
 end
 
 function menuModel.createPauseMenu()
     return {
         selectedOption = 1,
-        mouseHovering = false,
         options = { "Resume", "Save", "Back to Main Menu", "Quit" },
-        blockMovement = true,
-        backgroundColor = { 0, 0, 0, 0.5 },
-        overlay = true
+        backgroundColor = { 0, 0, 0, 0.7 },  -- Increased opacity for better visibility
+        overlay = true,
+        draw = function(self, pass)
+            menuView.drawMenu(
+                pass,
+                self.options,
+                self.selectedOption,
+                self.backgroundColor,
+                self.overlay
+            )
+        end,
+        load = function(self)
+            print("[PauseMenu] Pause menu loaded")
+        end,
+        unload = function(self)
+            print("[PauseMenu] Pause menu unloaded")
+        end
     }
 end
 

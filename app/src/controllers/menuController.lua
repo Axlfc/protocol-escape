@@ -2,6 +2,17 @@
 local menuController = {}
 
 function menuController.handleInput(key, scene, sceneManager)
+    if key == 'escape' then
+        if scene.name == 'game' then
+            if not sceneManager.isOverlayActive() then
+                sceneManager.switchOverlayScene('pauseMenu')
+            end
+        elseif scene.name == 'pauseMenu' then
+            sceneManager.clearOverlayScene()
+        end
+        return  -- Return here to prevent processing other inputs when toggling pause
+    end
+
     if not scene.options then return end
 
     if key == 'down' then
@@ -27,11 +38,12 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         end
     elseif scene.name == 'pauseMenu' then
         if option == "Resume" then
-            sceneManager.returnToPreviousScene()
+            sceneManager.clearOverlayScene()
         elseif option == "Save" then
             sceneManager.saveGameState({ timestamp = os.time() })
             print("Game saved!")
         elseif option == "Back to Main Menu" then
+            sceneManager.clearOverlayScene()  -- Clear pause menu first
             sceneManager.switchScene('mainMenu')
         elseif option == "Quit" then
             lovr.event.quit()
