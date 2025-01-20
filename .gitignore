@@ -1,5 +1,7 @@
 .vs
 
+.vscode/
+
 lovr.exe
 lovrc.bat
 enet.dll
@@ -9,3 +11,5 @@ luajit.dll
 msdfgen.dll
 ode.dll
 openxr_loader.dll
+
+test/

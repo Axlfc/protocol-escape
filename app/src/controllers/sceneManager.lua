@@ -85,6 +85,10 @@ function sceneManager.initialize()
         rules = gameMode.rules,
         objectives = gameMode.objectives
     }))
+
+    if gameInstance.debug then
+        print("[GameInstance] GameMode and GameState initialized.")
+    end
 end
 
 
