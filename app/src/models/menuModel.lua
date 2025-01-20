@@ -1,3 +1,4 @@
+-- app/src/models/menuModel.lua
 local menuView = require 'app.src.views.menuView'
 local menuModel = {}
 
@@ -6,72 +7,95 @@ local MENU_OPTIONS = {
     pause = { "Resume", "Save", "Back to Main Menu", "Quit" }
 }
 
-local BACKGROUND_COLORS = {
-    main = { 0, 0, 0 },
-    pause = { 0, 0, 0, 0.8 }
+local MENU_LAYOUTS = {
+    main = {
+        backgroundColor = { 0, 0, 0 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.3
+    },
+    pause = {
+        backgroundColor = { 0, 0, 0, 0.8 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.3
+    }
 }
 
-
-local function createMenu(name, options, backgroundColor, overlay)
-    assert(type(options) == "table" and #options > 0, "Options must be a non-empty table")
-    return {
+function menuModel.createMenu(name, options, layout)
+    -- Create the menu table with all properties
+    local menu = {
+        name = name,
         selectedOption = 1,
         options = options,
-        backgroundColor = backgroundColor,
-        overlay = overlay,
-        draw = function(self, pass)
-            menuView.drawMenu(
-                pass,
-                self.options,
-                self.selectedOption,
-                self.backgroundColor,
-                self.overlay
-            )
-        end,
-        load = function(self)
-            print(string.format("[%s] Menu loaded", name))
-        end,
-        unload = function(self)
-            print(string.format("[%s] Menu unloaded", name))
-        end
+        layout = layout
     }
-end
 
+    -- Define methods using the colon (`:`) syntax
+    function menu:load(messages)
+        print(string.format("[%s] Menu loaded", self.name))
+        self.selectedOption = 1  -- Reset selection on load
+    end
+
+    function menu:unload()
+        print(string.format("[%s] Menu unloaded", self.name))
+    end
+
+    function menu:draw(pass)
+        if not pass then return end
+        menuView.drawMenu(
+            pass,
+            self.options,
+            self.selectedOption,
+            self.layout.backgroundColor,
+            self.name == "pauseMenu"  -- overlay flag for pause menu
+        )
+    end
+
+    return menu
+end
 
 function menuModel.createMainMenu()
-    return createMenu("MainMenu", MENU_OPTIONS.main, BACKGROUND_COLORS.main, false)
+    return menuModel.createMenu("mainMenu", { "Start Game", "Options", "Exit" }, {
+        backgroundColor = { 0.1, 0.1, 0.1 }, -- Adjust as necessary
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.3
+    })
 end
 
-
 function menuModel.createPauseMenu()
-    return createMenu("PauseMenu", MENU_OPTIONS.pause, BACKGROUND_COLORS.pause, false)
+    return menuModel.createMenu("pauseMenu", MENU_OPTIONS.pause, MENU_LAYOUTS.pause)
 end
 
 
 function menuModel.createGameScene(params)
     params = params or {}
-    return {
-        blockMovement = params.blockMovement or false,
-        load = function(self, messages)
-            print("[GameScene] Loading game scene")
-        end,
-        update = function(self, dt)
-            if params.update then
-                params.update(dt)
-            end
-        end,
-        draw = function(self, pass)
-            if params.draw then
-                params.draw(pass)
-            else
-                pass:setColor(1, 1, 1)
-                pass:cube(0, 1.7, -3, 0.5)
-            end
-        end,
-        unload = function(self)
-            print("[GameScene] Unloading game scene")
-        end
+    local scene = {
+        name = "game"
     }
+
+    function scene:load(messages)
+        print("[GameScene] Loading game scene")
+    end
+
+    function scene:unload()
+        print("[GameScene] Unloading game scene")
+    end
+
+    function scene:update(dt)
+        if params.update then
+            params.update(dt)
+        end
+    end
+
+    function scene:draw(pass)
+        if params.draw then
+            params.draw(pass)
+        else
+            pass:setColor(1, 1, 1)
+            pass:cube(0, 1.7, -3, 0.5)
+        end
+    end
+
+    return scene
 end
 
 

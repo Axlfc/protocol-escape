@@ -5,9 +5,15 @@ local playerState = require 'app.src.models.playerState'
 
 local gameInstance = {
     isServer = false,  -- Set this to `true` for server setups
-    players = {},        -- All connected players
-    network = nil,       -- Network manager instance
     gameMode = nil,      -- Current game mode
+    gameState = nil,      -- Current game state
+    playerStates = {},
+    pawns = {},
+    controllers = {},
+    players = {},        -- All connected players
+    activePlayer = nil,  -- Reference to the currently active player
+    network = nil,       -- Network manager instance
+
     debug = true         -- Debug toggle
 }
 
@@ -16,9 +22,14 @@ function gameInstance.initialize()
     print("[GameInstance] Initializing...")
     gameInstance.gameMode = gameMode.new()
     gameState.reset()
+    
+    -- Create default player for single-player mode
+    local defaultPlayer = playerState.new("Player1")
+    gameInstance.addPlayer(defaultPlayer)
+    gameInstance.setActivePlayer(defaultPlayer)
+    
     if not gameInstance.isServer then
         print("[GameInstance] Client HUD and Widgets to be initialized.")
-        -- Client-specific HUD setup goes here
     end
 end
 
@@ -37,6 +48,24 @@ function gameInstance.addPlayer(player)
     if gameInstance.debug then
         print("[GameInstance] Player added:", player.name)
     end
+    
+    -- If this is the first player, make them active
+    if #gameInstance.players == 1 then
+        gameInstance.setActivePlayer(player)
+    end
+end
+
+
+function gameInstance.setActivePlayer(player)
+    gameInstance.activePlayer = player
+    if gameInstance.debug then
+        print("[GameInstance] Active player set to:", player.name)
+    end
+end
+
+
+function gameInstance.getActivePlayer()
+    return gameInstance.activePlayer
 end
 
 
@@ -53,7 +82,6 @@ end
 function gameInstance.setGameMode(mode)
     gameInstance.gameMode = mode
 end
-
 
 function gameInstance.getGameMode()
     return gameInstance.gameMode

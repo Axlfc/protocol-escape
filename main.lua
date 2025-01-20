@@ -5,8 +5,8 @@ local gameInstance = require 'app.src.models.gameInstance'
 
 function lovr.load()
     print("[Main] Game starting...")
-    
-    -- Initialize game instance, which manages gameMode and global state
+
+    -- Initialize game instance
     gameInstance.initialize()
 
     -- Set up scenes and switch to the main menu

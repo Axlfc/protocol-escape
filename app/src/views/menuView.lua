@@ -4,7 +4,7 @@ local menuView = {}
 
 -- Function to render the menu
 function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overlay, customShader)
-    -- Set the background
+    -- Set the background color
     if overlay then
         pass:setColor(unpack(backgroundColor))
         pass:plane(0, 1.7, -2, 4, 4)  -- Semi-transparent background
@@ -12,29 +12,30 @@ function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overl
         lovr.graphics.setBackgroundColor(unpack(backgroundColor))
     end
 
-    -- Apply a custom shader if provided
+    -- Apply custom shader, if provided
     if customShader then
         pass:setShader(customShader)
     end
 
-    pass:push() -- Save the current transform state
-    pass:origin() -- Reset to the default transform (no rotations or translations)
+    -- Begin rendering text
+    pass:push() -- Save the transform state
+    pass:origin() -- Reset to default origin
 
-    -- Render menu options
     for i, option in ipairs(options) do
         local y = 1.7 - (i - 1) * 0.3
         local isSelected = i == selectedOption
         pass:setColor(isSelected and {1, 1, 0} or {1, 1, 1})
-        pass:text(option, 0, y, -2, 0.2)
+        pass:text(option, 0, y, -2, 0.2) -- Text size set to 0.2 for consistency
     end
 
-    pass:pop() -- Restore the previous transform state
+    pass:pop() -- Restore the transform state
 
-    -- Reset the shader to default after drawing
+    -- Reset shader after rendering
     if customShader then
         pass:setShader(nil)
     end
 end
+
 
 
 -- Function to notify the controller when an option is selected

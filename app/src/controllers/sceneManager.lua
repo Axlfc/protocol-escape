@@ -2,6 +2,7 @@
 local menuView = require 'app.src.views.menuView'
 local menuModel = require 'app.src.models.menuModel'
 local menuController = require 'app.src.controllers.menuController'
+local gameController = require 'app.src.controllers.gameController'  
 local gameInstance = require 'app.src.models.gameInstance'
 
 local sceneManager = {
@@ -109,22 +110,21 @@ function sceneManager.switchScene(name, preserveState)
     end
 
     -- Notify the game instance of the scene change
-    gameInstance.onSceneSwitch(sceneManager.currentScene, name)
+    gameInstance.onSceneSwitch(sceneManager.currentScene and sceneManager.currentScene.name, name)
 
-    -- Existing logic
+    -- Unload the current scene
     if sceneManager.currentScene then
         if not preserveState then
             sceneManager.previousScene = sceneManager.currentScene.name
         end
-        if sceneManager.currentScene.unload then
-            sceneManager.currentScene.unload()
-        end
+        sceneManager.currentScene:unload()  -- Correct colon syntax
     end
 
+    -- Load the new scene
     sceneManager.currentScene = sceneManager.scenes[name]
-    if sceneManager.currentScene and sceneManager.currentScene.load then
+    if sceneManager.currentScene then
         local messages = sceneManager.pollMessages()
-        sceneManager.currentScene.load(messages)
+        sceneManager.currentScene:load(messages)  -- Correct colon syntax
     end
 end
 
@@ -176,31 +176,26 @@ end
 
 
 function sceneManager.switchOverlayScene(name)
-    if sceneManager.overlayScene and sceneManager.overlayScene.name == name then
-        debugPrint("Overlay scene is already active: " .. name)
+    if not sceneManager.scenes[name] then
+        print("[SceneManager] Overlay scene not found:", name)
         return
     end
 
-    debugPrint(string.format("Activating overlay scene: %s", name))
-    if sceneManager.scenes[name] then
-        -- Clear existing overlay if any
-        if sceneManager.overlayScene and sceneManager.overlayScene.unload then
-            sceneManager.overlayScene.unload()
-        end
-        sceneManager.overlayScene = sceneManager.scenes[name]
-        if sceneManager.overlayScene.load then
-            sceneManager.overlayScene.load()
-        end
-    else
-        debugPrint(string.format("WARNING: Overlay scene '%s' not found!", name))
+    if sceneManager.overlayScene then
+        sceneManager.overlayScene:unload()  -- Correct colon syntax
+    end
+
+    sceneManager.overlayScene = sceneManager.scenes[name]
+    if sceneManager.overlayScene then
+        sceneManager.overlayScene:load()  -- Correct colon syntax
     end
 end
 
 
 function sceneManager.clearOverlayScene()
     debugPrint("Clearing overlay scene")
-    if sceneManager.overlayScene and sceneManager.overlayScene.unload then
-        sceneManager.overlayScene.unload()
+    if sceneManager.overlayScene then
+        sceneManager.overlayScene:unload()  -- Use colon syntax
     end
     sceneManager.overlayScene = nil
 end
@@ -219,8 +214,28 @@ end
 
 function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
-    if activeScene then
+    if not activeScene then return end
+
+    -- First check for pause menu toggle (when in game)
+    if activeScene.name == 'game' and key == 'escape' then
+        if not sceneManager.isOverlayActive() then
+            sceneManager.switchOverlayScene('pauseMenu')
+            return
+        end
+    end
+
+    -- If we have an overlay active, handle its input first
+    if sceneManager.isOverlayActive() then
+        menuController.handleInput(key, sceneManager.overlayScene, sceneManager)
+        return
+    end
+
+    -- Handle scene-specific input
+    if activeScene.name == 'mainMenu' then
         menuController.handleInput(key, activeScene, sceneManager)
+    else
+        -- Handle gameplay input
+        gameController.handleInput(key)
     end
 end
 
@@ -230,13 +245,13 @@ function sceneManager.draw(pass)
         error("Pass is nil. Ensure LÖVR's draw function is providing a valid pass object.")
     end
 
-    if sceneManager.currentScene and sceneManager.currentScene.draw then
-        sceneManager.currentScene:draw(pass)
+    if sceneManager.currentScene then
+        sceneManager.currentScene:draw(pass)  -- Use colon syntax here
     end
 
     -- Render the overlay scene, if active
-    if sceneManager.overlayScene and sceneManager.overlayScene.draw then
-        sceneManager.overlayScene:draw(pass)
+    if sceneManager.overlayScene then
+        sceneManager.overlayScene:draw(pass)  -- Use colon syntax here
     end
 end
 
