@@ -1,4 +1,6 @@
 -- app/src/models/gameInstance.lua
+local logger = require 'app.utils.logger'
+local eventDispatcher = require 'app.utils.eventDispatcher'
 local gameMode = require 'app.src.models.gameMode'
 local gameState = require 'app.src.models.gameState'
 local playerState = require 'app.src.models.playerState'
@@ -44,22 +46,15 @@ end
 
 
 function gameInstance.addPlayer(player)
+    player.id = player.id or tostring(os.time()) .. math.random(1000)
     table.insert(gameInstance.players, player)
-    if gameInstance.debug then
-        print("[GameInstance] Player added:", player.name)
-    end
-    
-    -- If this is the first player, make them active
-    if #gameInstance.players == 1 then
-        gameInstance.setActivePlayer(player)
-    end
 end
 
 
 function gameInstance.setActivePlayer(player)
     gameInstance.activePlayer = player
     if gameInstance.debug then
-        print("[GameInstance] Active player set to:", player.name)
+        eventDispatcher.dispatch("playerAdded", { name = player.name, id = player.id })
     end
 end
 

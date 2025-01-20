@@ -1,7 +1,14 @@
 -- app/utils/eventDispatcher.lua
+local logger = require 'app.utils.logger'
 local eventDispatcher = {}
 
 eventDispatcher.listeners = {}
+
+local events = {
+    PLAYER_ADDED = "playerAdded",
+    SCENE_SWITCHED = "sceneSwitched",
+    GAME_SAVED = "gameSaved",
+}
 
 
 function eventDispatcher.addEventListener(event, listener)
@@ -19,6 +26,12 @@ function eventDispatcher.dispatch(event, data)
         end
     end
 end
+
+
+-- Register events after function definitions
+eventDispatcher.addEventListener(events.PLAYER_ADDED, function(data)
+    logger.info("Player added: " .. data.name .. "(" .. data.id .. ")")
+end)
 
 
 return eventDispatcher
