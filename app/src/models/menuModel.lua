@@ -102,7 +102,7 @@ function menuModel.createGameScene(params)
             params.draw(pass)
         else
             pass:setColor(1, 1, 1)
-            pass:cube(0, 1.7, -3, 0.5)
+            pass:cube(0, 1.7, -1, .5, lovr.headset.getTime(), 0, 1, 0, 'line')
         end
     end
 
