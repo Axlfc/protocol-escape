@@ -1,8 +1,16 @@
 -- app/src/controllers/menuController.lua
 local menuController = {}
 
+-- Configurable keybindings for flexibility
+local keybindings = {
+    exit = 'escape',
+    down = 'down',
+    up = 'up',
+    select = 'return'
+}
+
 function menuController.handleInput(key, scene, sceneManager)
-    if key == 'escape' then
+    if key == keybindings.exit then
         if scene.name == 'game' then
             if not sceneManager.isOverlayActive() then
                 sceneManager.switchOverlayScene('pauseMenu')
@@ -13,14 +21,14 @@ function menuController.handleInput(key, scene, sceneManager)
         return  -- Stop further input processing
     end
 
-    if not scene.options then return end
+    if not scene.options or #scene.options == 0 then return end  -- Handle empty or nil options
 
     -- Normal input handling for menu navigation
-    if key == 'down' then
+    if key == keybindings.down then
         scene.selectedOption = (scene.selectedOption % #scene.options) + 1
-    elseif key == 'up' then
+    elseif key == keybindings.up then
         scene.selectedOption = (scene.selectedOption - 2) % #scene.options + 1
-    elseif key == 'return' then
+    elseif key == keybindings.select then
         local selectedOption = scene.options[scene.selectedOption]
         menuController.handleOptionSelected(selectedOption, scene, sceneManager)
     end

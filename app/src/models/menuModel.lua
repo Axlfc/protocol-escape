@@ -1,15 +1,23 @@
--- app/src/models/menuModel.lua
 local menuView = require 'app.src.views.menuView'
 local menuModel = {}
 
-function menuModel.createMainMenu()
+local MENU_OPTIONS = {
+    main = { "Start Game", "Options", "Exit" },
+    pause = { "Resume", "Save", "Back to Main Menu", "Quit" }
+}
+
+local BACKGROUND_COLORS = {
+    main = { 0, 0, 0 },
+    pause = { 0, 0, 0, 0.8 }
+}
+
+local function createMenu(name, options, backgroundColor, overlay)
+    assert(type(options) == "table" and #options > 0, "Options must be a non-empty table")
     return {
         selectedOption = 1,
-        mouseHovering = false,
-        options = { "Start Game", "Options", "Exit" },
-        blockMovement = true,
-        backgroundColor = { 0, 0, 0 },
-        overlay = false,
+        options = options,
+        backgroundColor = backgroundColor,
+        overlay = overlay,
         draw = function(self, pass)
             menuView.drawMenu(
                 pass,
@@ -20,50 +28,41 @@ function menuModel.createMainMenu()
             )
         end,
         load = function(self)
-            print("[MainMenu] Loading main menu")
+            print(string.format("[%s] Menu loaded", name))
         end,
         unload = function(self)
-            print("[MainMenu] Unloading main menu")
+            print(string.format("[%s] Menu unloaded", name))
         end
     }
+end
+
+function menuModel.createMainMenu()
+    return createMenu("MainMenu", MENU_OPTIONS.main, BACKGROUND_COLORS.main, false)
 end
 
 function menuModel.createPauseMenu()
-    return {
-        selectedOption = 1,
-        options = { "Resume", "Save", "Back to Main Menu", "Quit" },
-        backgroundColor = { 0, 0, 0, .8 },
-        overlay = false,
-        draw = function(self, pass)
-            menuView.drawMenu(
-                pass,
-                self.options,
-                self.selectedOption,
-                self.backgroundColor,
-                self.overlay
-            )
-        end,
-        load = function(self)
-            print("[PauseMenu] Pause menu loaded")
-        end,
-        unload = function(self)
-            print("[PauseMenu] Pause menu unloaded")
-        end
-    }
+    return createMenu("PauseMenu", MENU_OPTIONS.pause, BACKGROUND_COLORS.pause, false)
 end
 
-function menuModel.createGameScene()
+function menuModel.createGameScene(params)
+    params = params or {}
     return {
-        blockMovement = false,
+        blockMovement = params.blockMovement or false,
         load = function(self, messages)
             print("[GameScene] Loading game scene")
         end,
         update = function(self, dt)
-            -- Update game state
+            if params.update then
+                params.update(dt)
+            end
         end,
         draw = function(self, pass)
-            pass:setColor(1, 1, 1)
-            pass:cube(0, 1.7, -3, 0.5)
+            if params.draw then
+                params.draw(pass)
+            else
+                pass:setColor(1, 1, 1)
+                pass:cube(0, 1.7, -3, 0.5)
+            end
         end,
         unload = function(self)
             print("[GameScene] Unloading game scene")

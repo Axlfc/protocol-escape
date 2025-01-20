@@ -1,6 +1,7 @@
 -- app/src/controllers/sceneManager.lua
 local menuView = require 'app.src.views.menuView'
 local menuController = require 'app.src.controllers.menuController'
+local menuModel = require 'app.src.models.menuModel'
 
 local sceneManager = {
     scenes = {},
@@ -27,7 +28,7 @@ end
 local function finalizeLogs()
     if lastMessage then
         local suffix = lastMessageCount > 1 and string.format(" (%d)", lastMessageCount) or ""
-        print(string.format("[SceneManager] Message posted: %s%s", lastMessage.type, suffix))
+        print(string.format("[SceneManager] Message posted: %s%s (%s)", lastMessage.type, suffix, lastMessage.details or "no details"))
         lastMessage = nil
         lastMessageCount = 0
     end
@@ -65,7 +66,18 @@ function sceneManager.pollMessages()
     return messages
 end
 
+-- Initialize scenes
+function sceneManager.initialize()
+    debugPrint("Initializing scenes...")
+    sceneManager.addScene('mainMenu', menuModel.createMainMenu())
+    sceneManager.addScene('pauseMenu', menuModel.createPauseMenu())
+    sceneManager.addScene('game', menuModel.createGameScene())
+end
+
 function sceneManager.addScene(name, scene)
+    if not (scene.load and scene.unload and scene.draw) then
+        error(string.format("Scene '%s' must have 'load', 'unload', and 'draw' functions.", name))
+    end
     debugPrint(string.format("Adding scene: %s", name))
     scene.name = name  -- Add name property to scene
     sceneManager.scenes[name] = scene
@@ -109,8 +121,17 @@ end
 
 function sceneManager.saveGameState(state)
     debugPrint("Saving game state")
-    for k, v in pairs(state) do
-        sceneManager.gameState[k] = v
+    local function deepMerge(t1, t2)
+        for k, v in pairs(t2) do
+            if type(v) == 'table' and type(t1[k]) == 'table' then
+                deepMerge(t1[k], v)
+            else
+                t1[k] = v
+            end
+        end
+    end
+    deepMerge(sceneManager.gameState, state)
+    for k, _ in pairs(state) do
         debugPrint(string.format("Saved state key: %s", k))
     end
 end
@@ -132,6 +153,11 @@ function sceneManager.update(dt)
 end
 
 function sceneManager.switchOverlayScene(name)
+    if sceneManager.overlayScene and sceneManager.overlayScene.name == name then
+        debugPrint("Overlay scene is already active: " .. name)
+        return
+    end
+
     debugPrint(string.format("Activating overlay scene: %s", name))
     if sceneManager.scenes[name] then
         -- Clear existing overlay if any
@@ -164,7 +190,6 @@ function sceneManager.isOverlayActive()
     return sceneManager.overlayScene ~= nil
 end
 
--- Update main.lua's keypressed function to use this
 function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
     if activeScene then
@@ -177,21 +202,16 @@ function sceneManager.draw(pass)
         error("Pass is nil. Ensure LÖVR's draw function is providing a valid pass object.")
     end
 
-    if sceneManager.currentScene then
-        if sceneManager.currentScene.draw then
-            sceneManager.currentScene:draw(pass)
-        end
+    if sceneManager.currentScene and sceneManager.currentScene.draw then
+        sceneManager.currentScene:draw(pass)
     end
 
     -- Render the overlay scene, if active
-    if sceneManager.overlayScene then
-        if sceneManager.overlayScene.draw then
-            sceneManager.overlayScene:draw(pass)
-        end
+    if sceneManager.overlayScene and sceneManager.overlayScene.draw then
+        sceneManager.overlayScene:draw(pass)
     end
 end
 
--- Ensure all pending logs are printed when necessary
 function sceneManager.finalizeLogs()
     finalizeLogs()
 end
