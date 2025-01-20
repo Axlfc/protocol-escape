@@ -9,6 +9,7 @@ local keybindings = {
     select = 'return'
 }
 
+
 function menuController.handleInput(key, scene, sceneManager)
     if key == keybindings.exit then
         if scene.name == 'game' then
@@ -34,6 +35,7 @@ function menuController.handleInput(key, scene, sceneManager)
     end
 end
 
+
 function menuController.handleOptionSelected(option, scene, sceneManager)
     if scene.name == 'mainMenu' then
         if option == "Start Game" then
@@ -57,5 +59,6 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         end
     end
 end
+
 
 return menuController

@@ -1,6 +1,7 @@
 -- app/src/views/menuView.lua
 local menuView = {}
 
+
 -- Function to render the menu
 function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overlay, customShader)
     -- Set the background
@@ -35,10 +36,12 @@ function menuView.drawMenu(pass, options, selectedOption, backgroundColor, overl
     end
 end
 
+
 -- Function to notify the controller when an option is selected
 function menuView.notifyOptionSelected(controller, option)
     controller.handleOptionSelected(option)
 end
+
 
 -- Example custom shaders for testing
 menuView.shaders = {

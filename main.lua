@@ -1,24 +1,34 @@
 -- main.lua
 local sceneManager = require 'app.src.controllers.sceneManager'
+local gameInstance = require 'app.src.models.gameInstance'
 
 
 function lovr.load()
     print("[Main] Game starting...")
-    sceneManager.initialize() -- Handle scene setup within sceneManager
+    
+    -- Initialize game instance, which manages gameMode and global state
+    gameInstance.initialize()
+
+    -- Set up scenes and switch to the main menu
+    sceneManager.initialize()
     sceneManager.switchScene('mainMenu')
 end
 
 
 function lovr.update(dt)
+    -- Update the game instance and propagate updates
+    gameInstance.update(dt)
     sceneManager.update(dt)
 end
 
 
 function lovr.keypressed(key)
-    sceneManager.handleInput(key) -- Delegate input handling entirely to sceneManager
+    -- Handle input at the scene level via sceneManager
+    sceneManager.handleInput(key)
 end
 
 
 function lovr.draw(pass)
+    -- Render the current and overlay scenes
     sceneManager.draw(pass)
 end

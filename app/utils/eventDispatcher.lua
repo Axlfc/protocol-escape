@@ -3,12 +3,14 @@ local eventDispatcher = {}
 
 eventDispatcher.listeners = {}
 
+
 function eventDispatcher.addEventListener(event, listener)
     if not eventDispatcher.listeners[event] then
         eventDispatcher.listeners[event] = {}
     end
     table.insert(eventDispatcher.listeners[event], listener)
 end
+
 
 function eventDispatcher.dispatch(event, data)
     if eventDispatcher.listeners[event] then
@@ -17,5 +19,6 @@ function eventDispatcher.dispatch(event, data)
         end
     end
 end
+
 
 return eventDispatcher

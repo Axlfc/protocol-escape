@@ -1,7 +1,8 @@
 -- app/src/controllers/sceneManager.lua
 local menuView = require 'app.src.views.menuView'
-local menuController = require 'app.src.controllers.menuController'
 local menuModel = require 'app.src.models.menuModel'
+local menuController = require 'app.src.controllers.menuController'
+local gameInstance = require 'app.src.models.gameInstance'
 
 local sceneManager = {
     scenes = {},
@@ -17,12 +18,14 @@ local sceneManager = {
 local lastMessage = nil
 local lastMessageCount = 0
 
+
 -- Debug print helper
 local function debugPrint(...)
     if sceneManager.debug then
         print(string.format("[SceneManager] %s", ...))
     end
 end
+
 
 -- Finalize grouped log messages
 local function finalizeLogs()
@@ -33,6 +36,7 @@ local function finalizeLogs()
         lastMessageCount = 0
     end
 end
+
 
 -- Post a message and group similar ones
 function sceneManager.postMessage(message)
@@ -50,6 +54,7 @@ function sceneManager.postMessage(message)
     table.insert(sceneManager.messageQueue, message)
 end
 
+
 -- Poll messages and flush grouped logs
 function sceneManager.pollMessages()
     finalizeLogs()  -- Ensure remaining messages are logged
@@ -66,13 +71,22 @@ function sceneManager.pollMessages()
     return messages
 end
 
+
 -- Initialize scenes
 function sceneManager.initialize()
-    debugPrint("Initializing scenes...")
+    print("[SceneManager] Initializing scenes...")
+
+    -- Access gameMode and set up specific scenes based on the mode
+    local gameMode = gameInstance.getGameMode()
+
     sceneManager.addScene('mainMenu', menuModel.createMainMenu())
     sceneManager.addScene('pauseMenu', menuModel.createPauseMenu())
-    sceneManager.addScene('game', menuModel.createGameScene())
+    sceneManager.addScene('game', menuModel.createGameScene({
+        rules = gameMode.rules,
+        objectives = gameMode.objectives
+    }))
 end
+
 
 function sceneManager.addScene(name, scene)
     if not (scene.load and scene.unload and scene.draw) then
@@ -83,32 +97,33 @@ function sceneManager.addScene(name, scene)
     sceneManager.scenes[name] = scene
 end
 
-function sceneManager.switchScene(name, preserveState)
-    debugPrint(string.format("Switching to scene: %s (preserve state: %s)", name, preserveState and "true" or "false"))
 
+function sceneManager.switchScene(name, preserveState)
+    if not sceneManager.scenes[name] then
+        print("[SceneManager] Scene not found:", name)
+        return
+    end
+
+    -- Notify the game instance of the scene change
+    gameInstance.onSceneSwitch(sceneManager.currentScene, name)
+
+    -- Existing logic
     if sceneManager.currentScene then
         if not preserveState then
             sceneManager.previousScene = sceneManager.currentScene.name
-            debugPrint(string.format("Previous scene set to: %s", sceneManager.previousScene))
         end
         if sceneManager.currentScene.unload then
-            debugPrint("Unloading current scene")
             sceneManager.currentScene.unload()
         end
     end
 
     sceneManager.currentScene = sceneManager.scenes[name]
-
-    if sceneManager.currentScene then
-        debugPrint(string.format("Loading scene: %s", name))
-        if sceneManager.currentScene.load then
-            local messages = sceneManager.pollMessages()
-            sceneManager.currentScene.load(messages)
-        end
-    else
-        debugPrint(string.format("WARNING: Scene '%s' not found!", name))
+    if sceneManager.currentScene and sceneManager.currentScene.load then
+        local messages = sceneManager.pollMessages()
+        sceneManager.currentScene.load(messages)
     end
 end
+
 
 function sceneManager.returnToPreviousScene()
     if sceneManager.previousScene then
@@ -118,6 +133,7 @@ function sceneManager.returnToPreviousScene()
         debugPrint("No previous scene to return to")
     end
 end
+
 
 function sceneManager.saveGameState(state)
     debugPrint("Saving game state")
@@ -136,9 +152,11 @@ function sceneManager.saveGameState(state)
     end
 end
 
+
 function sceneManager.getGameState()
     return sceneManager.gameState
 end
+
 
 function sceneManager.update(dt)
     if sceneManager.overlayScene then
@@ -151,6 +169,7 @@ function sceneManager.update(dt)
         sceneManager.currentScene.update(dt)
     end
 end
+
 
 function sceneManager.switchOverlayScene(name)
     if sceneManager.overlayScene and sceneManager.overlayScene.name == name then
@@ -173,6 +192,7 @@ function sceneManager.switchOverlayScene(name)
     end
 end
 
+
 function sceneManager.clearOverlayScene()
     debugPrint("Clearing overlay scene")
     if sceneManager.overlayScene and sceneManager.overlayScene.unload then
@@ -181,14 +201,17 @@ function sceneManager.clearOverlayScene()
     sceneManager.overlayScene = nil
 end
 
+
 function sceneManager.getCurrentActiveScene()
     -- Return overlay scene if it exists, otherwise return current scene
     return sceneManager.overlayScene or sceneManager.currentScene
 end
 
+
 function sceneManager.isOverlayActive()
     return sceneManager.overlayScene ~= nil
 end
+
 
 function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
@@ -196,6 +219,7 @@ function sceneManager.handleInput(key)
         menuController.handleInput(key, activeScene, sceneManager)
     end
 end
+
 
 function sceneManager.draw(pass)
     if not pass then
@@ -212,8 +236,10 @@ function sceneManager.draw(pass)
     end
 end
 
+
 function sceneManager.finalizeLogs()
     finalizeLogs()
 end
+
 
 return sceneManager

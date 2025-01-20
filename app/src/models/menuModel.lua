@@ -11,6 +11,7 @@ local BACKGROUND_COLORS = {
     pause = { 0, 0, 0, 0.8 }
 }
 
+
 local function createMenu(name, options, backgroundColor, overlay)
     assert(type(options) == "table" and #options > 0, "Options must be a non-empty table")
     return {
@@ -36,13 +37,16 @@ local function createMenu(name, options, backgroundColor, overlay)
     }
 end
 
+
 function menuModel.createMainMenu()
     return createMenu("MainMenu", MENU_OPTIONS.main, BACKGROUND_COLORS.main, false)
 end
 
+
 function menuModel.createPauseMenu()
     return createMenu("PauseMenu", MENU_OPTIONS.pause, BACKGROUND_COLORS.pause, false)
 end
+
 
 function menuModel.createGameScene(params)
     params = params or {}
@@ -69,5 +73,6 @@ function menuModel.createGameScene(params)
         end
     }
 end
+
 
 return menuModel
