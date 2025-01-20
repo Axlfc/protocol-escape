@@ -15,10 +15,22 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
     if scene.name == 'mainMenu' then
         if option == "Start Game" then
             sceneManager.switchScene('game')
+        elseif option == "Multiplayer" then
+            sceneManager.switchScene('multiplayerMenu')
         elseif option == "Options" then
             print("Options menu not yet implemented")
         elseif option == "Exit" then
             lovr.event.quit()
+        end
+    elseif scene.name == 'multiplayerMenu' then
+        if option == "Host Game" then
+            print("[MultiplayerMenu] Hosting a game...")
+            -- Add hosting logic here
+        elseif option == "Join Game" then
+            print("[MultiplayerMenu] Joining a game...")
+            -- Add joining logic here
+        elseif option == "Back" then
+            sceneManager.switchScene('mainMenu')
         end
     elseif scene.name == 'pauseMenu' then
         if option == "Resume" then
@@ -37,24 +49,34 @@ end
 
 
 function menuController.handleInput(key, scene, sceneManager)
-    if not scene.options or #scene.options == 0 then return end
-
-    -- Handle escape key for pause menu toggle
-    if key == menuKeybindings.exit then
-        if scene.name == 'pauseMenu' then
-            sceneManager.clearOverlayScene()
-            return
-        end
+    if not scene or not scene.options or #scene.options == 0 then
+        return
     end
 
-    -- Menu navigation logic
+    -- Initialize selectedOption if it doesn't exist
+    if not scene.selectedOption then
+        scene.selectedOption = 1
+    end
+
     if key == menuKeybindings.down then
-        scene.selectedOption = (scene.selectedOption % #scene.options) + 1
+        -- Move down, wrapping around to the top
+        scene.selectedOption = scene.selectedOption + 1
+        if scene.selectedOption > #scene.options then
+            scene.selectedOption = 1
+        end
+        print(string.format("[Debug] Moved down to option: %s", scene.options[scene.selectedOption]))
+
     elseif key == menuKeybindings.up then
-        scene.selectedOption = (scene.selectedOption - 2) % #scene.options + 1
+        -- Move up, wrapping around to the bottom
+        scene.selectedOption = scene.selectedOption - 1
+        if scene.selectedOption < 1 then
+            scene.selectedOption = #scene.options
+        end
+        print(string.format("[Debug] Moved up to option: %s", scene.options[scene.selectedOption]))
+
     elseif key == menuKeybindings.select then
         local selectedOption = scene.options[scene.selectedOption]
-        -- Now correctly reference the module's function
+        print(string.format("[Debug] Selected option: %s", selectedOption))
         menuController.handleOptionSelected(selectedOption, scene, sceneManager)
     end
 end

@@ -82,6 +82,7 @@ function sceneManager.initialize()
 
     sceneManager.addScene('mainMenu', menuModel.createMainMenu())
     sceneManager.addScene('pauseMenu', menuModel.createPauseMenu())
+    sceneManager.addScene('multiplayerMenu', menuModel.createMultiplayerMenu())  -- Correctly add multiplayer menu
     sceneManager.addScene('game', menuModel.createGameScene({
         rules = gameMode.rules,
         objectives = gameMode.objectives
@@ -117,14 +118,24 @@ function sceneManager.switchScene(name, preserveState)
         if not preserveState then
             sceneManager.previousScene = sceneManager.currentScene.name
         end
-        sceneManager.currentScene:unload()  -- Correct colon syntax
+        sceneManager.currentScene:unload()
     end
 
     -- Load the new scene
     sceneManager.currentScene = sceneManager.scenes[name]
     if sceneManager.currentScene then
+        -- Ensure menu properties are properly initialized
+        if sceneManager.currentScene.options then
+            sceneManager.currentScene.selectedOption = 1
+        end
         local messages = sceneManager.pollMessages()
-        sceneManager.currentScene:load(messages)  -- Correct colon syntax
+        sceneManager.currentScene:load(messages)
+    end
+
+    debugPrint(string.format("Switched to scene: %s", name))
+    if sceneManager.currentScene.options then
+        debugPrint(string.format("Menu options: %s", table.concat(sceneManager.currentScene.options, ", ")))
+        debugPrint(string.format("Selected option: %d", sceneManager.currentScene.selectedOption))
     end
 end
 
@@ -216,6 +227,12 @@ function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
     if not activeScene then return end
 
+    -- Debug print to track input handling
+    debugPrint(string.format("Handling input '%s' for scene '%s'", key, activeScene.name))
+    if activeScene.selectedOption then
+        debugPrint(string.format("Current selection: %d", activeScene.selectedOption))
+    end
+
     -- First check for pause menu toggle (when in game)
     if activeScene.name == 'game' and key == 'escape' then
         if not sceneManager.isOverlayActive() then
@@ -231,7 +248,7 @@ function sceneManager.handleInput(key)
     end
 
     -- Handle scene-specific input
-    if activeScene.name == 'mainMenu' then
+    if activeScene.name == 'mainMenu' or activeScene.name == 'multiplayerMenu' or activeScene.name == 'pauseMenu' then
         menuController.handleInput(key, activeScene, sceneManager)
     else
         -- Handle gameplay input

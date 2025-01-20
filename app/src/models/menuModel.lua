@@ -3,18 +3,24 @@ local menuView = require 'app.src.views.menuView'
 local menuModel = {}
 
 local MENU_OPTIONS = {
-    main = { "Start Game", "Options", "Exit" },
-    pause = { "Resume", "Save", "Back to Main Menu", "Quit" }
+    main = { "Start Game", "Multiplayer", "Options", "Exit" },
+    pause = { "Resume", "Save", "Back to Main Menu", "Quit" },
+    multiplayer = {"Host Game", "Join Game", "Back"}
 }
 
 local MENU_LAYOUTS = {
     main = {
-        backgroundColor = { 0, 0, 0 },
+        backgroundColor = { 0.1, 0.1, 0.1 },
         position = { x = 0, y = 1.7, z = -2 },
         spacing = 0.3
     },
     pause = {
         backgroundColor = { 0, 0, 0, 0.8 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.3
+    },
+    multiplayer = {
+        backgroundColor = { 0.1, 0.1, 0.3 },
         position = { x = 0, y = 1.7, z = -2 },
         spacing = 0.3
     }
@@ -24,19 +30,23 @@ function menuModel.createMenu(name, options, layout)
     -- Create the menu table with all properties
     local menu = {
         name = name,
-        selectedOption = 1,
+        selectedOption = 1,  -- Always initialize selectedOption to 1
         options = options,
         layout = layout
     }
 
-    -- Define methods using the colon (`:`) syntax
     function menu:load(messages)
-        print(string.format("[%s] Menu loaded", self.name))
-        self.selectedOption = 1  -- Reset selection on load
+        print(string.format("[%s] Menu loaded with options: %s", self.name, table.concat(self.options, ", ")))
+        -- Ensure selectedOption is set to 1 on load
+        self.selectedOption = 1
     end
 
     function menu:unload()
         print(string.format("[%s] Menu unloaded", self.name))
+    end
+
+    function menu:update(dt)
+        -- Add update logic if needed
     end
 
     function menu:draw(pass)
@@ -46,23 +56,24 @@ function menuModel.createMenu(name, options, layout)
             self.options,
             self.selectedOption,
             self.layout.backgroundColor,
-            self.name == "pauseMenu"  -- overlay flag for pause menu
+            self.name == "pauseMenu"
         )
     end
 
     return menu
 end
 
+
 function menuModel.createMainMenu()
-    return menuModel.createMenu("mainMenu", { "Start Game", "Options", "Exit" }, {
-        backgroundColor = { 0.1, 0.1, 0.1 }, -- Adjust as necessary
-        position = { x = 0, y = 1.7, z = -2 },
-        spacing = 0.3
-    })
+    return menuModel.createMenu("mainMenu", MENU_OPTIONS.main, MENU_LAYOUTS.main)
 end
 
 function menuModel.createPauseMenu()
     return menuModel.createMenu("pauseMenu", MENU_OPTIONS.pause, MENU_LAYOUTS.pause)
+end
+
+function menuModel.createMultiplayerMenu()
+    return menuModel.createMenu("multiplayerMenu", MENU_OPTIONS.multiplayer, MENU_LAYOUTS.multiplayer)
 end
 
 
