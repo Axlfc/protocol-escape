@@ -233,10 +233,16 @@ function sceneManager.handleInput(key)
         debugPrint(string.format("Current selection: %d", activeScene.selectedOption))
     end
 
-    -- First check for pause menu toggle (when in game)
-    if activeScene.name == 'game' and key == 'escape' then
-        if not sceneManager.isOverlayActive() then
+    -- Handle escape key for pause menu toggle
+    if key == 'escape' then
+        if activeScene.name == 'game' then
             sceneManager.switchOverlayScene('pauseMenu')
+            return
+        elseif activeScene.name == 'pauseMenu' then
+            sceneManager.clearOverlayScene()
+            return
+        elseif activeScene.name == 'multiplayerMenu' then
+            sceneManager.switchScene('mainMenu')
             return
         end
     end
