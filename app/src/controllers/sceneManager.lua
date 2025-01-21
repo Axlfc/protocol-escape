@@ -3,15 +3,18 @@ local menuModel = require 'app.src.models.menuModel'
 local menuController = require 'app.src.controllers.menuController'
 local gameController = require 'app.src.controllers.gameController'  
 local gameInstance = require 'app.src.models.gameInstance'
+local fade = require 'app.utils.fade'
 
 local sceneManager = {
     scenes = {},
     currentScene = nil,
     previousScene = nil,
-    overlayScene = nil,  -- Store the current overlay scene
+    overlayScene = nil,
     gameState = {},
     messageQueue = {},
-    debug = true
+    debug = true,
+    transitioning = false,
+    pendingScene = nil
 }
 
 -- Grouped logging variables
@@ -72,20 +75,33 @@ function sceneManager.pollMessages()
 end
 
 
--- Initialize scenes
 function sceneManager.initialize()
     print("[SceneManager] Initializing scenes...")
 
-    -- Access gameMode and set up specific scenes based on the mode
     local gameMode = gameInstance.getGameMode()
 
     sceneManager.addScene('mainMenu', menuModel.createMainMenu())
     sceneManager.addScene('pauseMenu', menuModel.createPauseMenu())
-    sceneManager.addScene('multiplayerMenu', menuModel.createMultiplayerMenu())  -- Correctly add multiplayer menu
+    sceneManager.addScene('multiplayerMenu', menuModel.createMultiplayerMenu())
     sceneManager.addScene('game', menuModel.createGameScene({
         rules = gameMode.rules,
         objectives = gameMode.objectives
     }))
+
+    -- Initialize first scene
+    debugPrint("Setting up initial scene: mainMenu")
+    sceneManager.currentScene = sceneManager.scenes['mainMenu']
+    if sceneManager.currentScene then
+        local success, err = pcall(function()
+            sceneManager.currentScene:load({})
+        end)
+        if not success then
+            debugPrint("Error loading initial scene: " .. tostring(err))
+        end
+        -- Start with fade in
+        fade.opacity = 1
+        fade:startFadeIn()
+    end
 
     if gameInstance.debug then
         print("[GameInstance] GameMode and GameState initialized.")
@@ -102,35 +118,78 @@ function sceneManager.addScene(name, scene)
 end
 
 
-function sceneManager.switchScene(name, preserveState)
-    if not sceneManager.scenes[name] then
-        print("[SceneManager] Scene not found:", name)
+function sceneManager.completeTransition()
+    if not sceneManager.transitioning or not sceneManager.pendingScene then
         return
     end
 
-    -- Notify the game instance of the scene change
-    gameInstance.onSceneSwitch(sceneManager.currentScene and sceneManager.currentScene.name, name)
+    debugPrint("Completing transition to: " .. sceneManager.pendingScene)
 
-    -- Unload the current scene
+    -- Store previous scene if needed
     if sceneManager.currentScene then
-        if not preserveState then
-            sceneManager.previousScene = sceneManager.currentScene.name
+        debugPrint("Unloading current scene: " .. sceneManager.currentScene.name)
+        sceneManager.previousScene = sceneManager.currentScene.name
+        -- Ensure unload is called and catch any errors
+        local success, err = pcall(function()
+            sceneManager.currentScene:unload()
+        end)
+        if not success then
+            debugPrint("Error unloading scene: " .. tostring(err))
         end
-        sceneManager.currentScene:unload()
+        sceneManager.currentScene = nil  -- Clear current scene reference
     end
 
-    -- Load the new scene
-    sceneManager.currentScene = sceneManager.scenes[name]
-    if sceneManager.currentScene then
-        -- Ensure menu properties are properly initialized
-        if sceneManager.currentScene.options then
-            sceneManager.currentScene.selectedOption = 1
-        end
-        local messages = sceneManager.pollMessages()
+    -- Switch to new scene
+    debugPrint("Loading new scene: " .. sceneManager.pendingScene)
+    sceneManager.currentScene = sceneManager.scenes[sceneManager.pendingScene]
+    local messages = sceneManager.pollMessages()
+
+    -- Ensure load is called and catch any errors
+    local success, err = pcall(function()
         sceneManager.currentScene:load(messages)
+    end)
+    if not success then
+        debugPrint("Error loading scene: " .. tostring(err))
     end
 
-    debugPrint(string.format("Switched to scene: %s", name))
+    -- Start fade in
+    fade:startFadeIn()
+
+    -- Reset transition state
+    sceneManager.transitioning = false
+    sceneManager.pendingScene = nil
+    debugPrint("Transition complete")
+end
+
+function sceneManager.switchScene(name, preserveState)
+    if not sceneManager.scenes[name] then
+        debugPrint("Scene not found: " .. name)
+        return
+    end
+
+    -- Don't switch if we're already transitioning
+    if sceneManager.transitioning then
+        debugPrint("Already transitioning, ignoring switch request")
+        return
+    end
+
+    -- Don't transition to the same scene
+    if sceneManager.currentScene and sceneManager.currentScene.name == name then
+        debugPrint("Already in scene " .. name .. ", ignoring switch request")
+        return
+    end
+
+    debugPrint("Starting transition from " .. (sceneManager.currentScene and sceneManager.currentScene.name or "nil") .. " to " .. name)
+
+    -- Set up the pending transition
+    sceneManager.transitioning = true
+    sceneManager.pendingScene = name
+
+    -- Start fade out, then switch scene and fade in
+    fade:startFadeOut(function()
+        sceneManager.completeTransition()
+        fade:startFadeIn()
+    end)
 end
 
 
@@ -168,6 +227,9 @@ end
 
 
 function sceneManager.update(dt)
+    -- Update fade effect
+    fade:update(dt)
+
     if sceneManager.overlayScene then
         -- Only update the overlay scene
         if sceneManager.overlayScene.update then
@@ -221,7 +283,12 @@ function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
     if not activeScene then return end
 
-    -- Handle escape key for pause menu toggle
+    -- If we're in the middle of a fade transition, don't handle inputs
+    if sceneManager.transitioning then
+        return
+    end
+
+    -- Handle escape key for scene transitions
     if key == 'escape' then
         if activeScene.name == 'game' then
             sceneManager.switchOverlayScene('pauseMenu')
@@ -245,7 +312,6 @@ function sceneManager.handleInput(key)
     if activeScene.name == 'mainMenu' or activeScene.name == 'multiplayerMenu' or activeScene.name == 'pauseMenu' then
         menuController.handleInput(key, activeScene, sceneManager)
     else
-        -- Handle gameplay input
         gameController.handleInput(key)
     end
 end
@@ -256,14 +322,21 @@ function sceneManager.draw(pass)
         error("Pass is nil. Ensure LÖVR's draw function is providing a valid pass object.")
     end
 
+    -- Draw current scene
     if sceneManager.currentScene then
-        sceneManager.currentScene:draw(pass)  -- Use colon syntax here
+        sceneManager.currentScene:draw(pass)
+    else
+        debugPrint("No current scene to draw")
     end
 
-    -- Render the overlay scene, if active
+    -- Draw overlay scene if active
     if sceneManager.overlayScene then
-        sceneManager.overlayScene:draw(pass)  -- Use colon syntax here
+        debugPrint("Drawing overlay: " .. sceneManager.overlayScene.name)
+        sceneManager.overlayScene:draw(pass)
     end
+
+    -- Draw fade effect last
+    fade:draw(pass)
 end
 
 
