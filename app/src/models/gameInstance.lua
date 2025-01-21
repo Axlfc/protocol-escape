@@ -1,5 +1,4 @@
 -- app/src/models/gameInstance.lua
-local logger = require 'app.utils.logger'
 local eventDispatcher = require 'app.utils.eventDispatcher'
 local gameMode = require 'app.src.models.gameMode'
 local gameState = require 'app.src.models.gameState'

@@ -1,5 +1,4 @@
 -- app/src/controllers/sceneManager.lua
-local menuView = require 'app.src.views.menuView'
 local menuModel = require 'app.src.models.menuModel'
 local menuController = require 'app.src.controllers.menuController'
 local gameController = require 'app.src.controllers.gameController'  
@@ -98,7 +97,6 @@ function sceneManager.addScene(name, scene)
     if not (scene.load and scene.unload and scene.draw) then
         error(string.format("Scene '%s' must have 'load', 'unload', and 'draw' functions.", name))
     end
-    debugPrint(string.format("Adding scene: %s", name))
     scene.name = name  -- Add name property to scene
     sceneManager.scenes[name] = scene
 end
@@ -133,10 +131,6 @@ function sceneManager.switchScene(name, preserveState)
     end
 
     debugPrint(string.format("Switched to scene: %s", name))
-    if sceneManager.currentScene.options then
-        debugPrint(string.format("Menu options: %s", table.concat(sceneManager.currentScene.options, ", ")))
-        debugPrint(string.format("Selected option: %d", sceneManager.currentScene.selectedOption))
-    end
 end
 
 
@@ -226,12 +220,6 @@ end
 function sceneManager.handleInput(key)
     local activeScene = sceneManager.getCurrentActiveScene()
     if not activeScene then return end
-
-    -- Debug print to track input handling
-    debugPrint(string.format("Handling input '%s' for scene '%s'", key, activeScene.name))
-    if activeScene.selectedOption then
-        debugPrint(string.format("Current selection: %d", activeScene.selectedOption))
-    end
 
     -- Handle escape key for pause menu toggle
     if key == 'escape' then

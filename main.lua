@@ -4,8 +4,6 @@ local gameInstance = require 'app.src.models.gameInstance'
 
 
 function lovr.load()
-    print("[Main] Game starting...")
-
     -- Initialize game instance
     gameInstance.initialize()
 
