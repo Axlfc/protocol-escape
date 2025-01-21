@@ -331,7 +331,6 @@ function sceneManager.draw(pass)
 
     -- Draw overlay scene if active
     if sceneManager.overlayScene then
-        debugPrint("Drawing overlay: " .. sceneManager.overlayScene.name)
         sceneManager.overlayScene:draw(pass)
     end
 
