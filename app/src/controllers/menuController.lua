@@ -1,4 +1,6 @@
 -- app/src/controllers/menuController.lua
+local networkManager = require 'app.utils.networkManager'
+
 local menuController = {}
 
 -- Configurable keybindings specifically for menu navigation
@@ -13,8 +15,13 @@ local menuKeybindings = {
 local function handleHostGameMenu(option, scene, sceneManager)
     if option == "Start Hosting" then
         print("[HostGameMenu] Starting to host a game...")
-        -- Replace with actual hosting logic
-        sceneManager.switchScene("game")
+        local success, err = networkManager.startServer()
+        if success then
+            print("[HostGameMenu] Server started successfully!")
+            sceneManager.switchScene("game")
+        else
+            print("[HostGameMenu] Failed to start server:", err)
+        end
     elseif option == "Server Options" then
         sceneManager.switchScene("serverOptionsMenu")
     elseif option == "Back" then
@@ -24,11 +31,16 @@ end
 
 local function handleJoinGameMenu(option, scene, sceneManager)
     if option == "Connect to IP" then
-        print("[JoinGameMenu] Connecting to IP...")
-        -- Replace with actual join logic
+        print("[JoinGameMenu] Attempting to connect...")
+        local success, err = networkManager.connectToServer("127.0.0.1") -- Replace with user input
+        if success then
+            print("[JoinGameMenu] Connected to server.")
+            sceneManager.switchScene("game")
+        else
+            print("[JoinGameMenu] Failed to connect:", err)
+        end
     elseif option == "Recent Servers" then
-        print("[JoinGameMenu] Showing recent servers...")
-        -- Implement recent server logic
+        print("[JoinGameMenu] Recent servers functionality not implemented.")
     elseif option == "Back" then
         sceneManager.switchScene("multiplayerMenu")
     end

@@ -121,6 +121,12 @@ function sceneManager.initialize()
 end
 
 
+function sceneManager.returnToMainMenu(reason)
+    print("[SceneManager] Returning to main menu. Reason:", reason)
+    sceneManager.switchScene("mainMenu")
+end
+
+
 function sceneManager.addScene(name, scene)
     if not (scene.load and scene.unload and scene.draw) then
         error(string.format("Scene '%s' must have 'load', 'unload', and 'draw' functions.", name))

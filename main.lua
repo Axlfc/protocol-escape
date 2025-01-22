@@ -1,11 +1,13 @@
 -- main.lua
 local sceneManager = require 'app.src.controllers.sceneManager'
 local gameInstance = require 'app.src.models.gameInstance'
+local networkManager = require 'app.utils.networkManager'
 
 
 function lovr.load()
     -- Initialize game instance
     gameInstance.initialize()
+
 
     -- Set up scenes and switch to the main menu
     sceneManager.initialize()
@@ -29,4 +31,11 @@ end
 function lovr.draw(pass)
     -- Render the current and overlay scenes
     sceneManager.draw(pass)
+end
+
+
+function lovr.quit()
+    if networkManager.isServer then
+        networkManager.shutdownServer()
+    end
 end
