@@ -11,5 +11,16 @@ luajit.dll
 msdfgen.dll
 ode.dll
 openxr_loader.dll
+cjson.dll
+enet.lib
+joltc.dll
+lovr.exp
+lovr.lib
+lovr.pdb
+ltn12.dll
+mime.dll
+openxr_loaderd.dll
+socket.dll
 
+doc/
 test/
