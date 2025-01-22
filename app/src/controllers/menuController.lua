@@ -10,8 +10,51 @@ local menuKeybindings = {
 }
 
 
+local function handleHostGameMenu(option, scene, sceneManager)
+    if option == "Start Hosting" then
+        print("[HostGameMenu] Starting to host a game...")
+        -- Replace with actual hosting logic
+        sceneManager.switchScene("game")
+    elseif option == "Server Options" then
+        sceneManager.switchScene("serverOptionsMenu")
+    elseif option == "Back" then
+        sceneManager.switchScene("multiplayerMenu")
+    end
+end
+
+local function handleJoinGameMenu(option, scene, sceneManager)
+    if option == "Connect to IP" then
+        print("[JoinGameMenu] Connecting to IP...")
+        -- Replace with actual join logic
+    elseif option == "Recent Servers" then
+        print("[JoinGameMenu] Showing recent servers...")
+        -- Implement recent server logic
+    elseif option == "Back" then
+        sceneManager.switchScene("multiplayerMenu")
+    end
+end
+
+local function handleServerOptionsMenu(option, scene, sceneManager)
+    if option == "Back" then
+        sceneManager.switchScene("hostGameMenu")
+    else
+        print(string.format("[ServerOptionsMenu] Selected option: %s", option))
+    end
+end
+
+
 -- Keep menu action handling separate
 function menuController.handleOptionSelected(option, scene, sceneManager)
+    if scene.name == "hostGameMenu" then
+        handleHostGameMenu(option, scene, sceneManager)
+    elseif scene.name == "joinGameMenu" then
+        handleJoinGameMenu(option, scene, sceneManager)
+    elseif scene.name == "serverOptionsMenu" then
+        handleServerOptionsMenu(option, scene, sceneManager)
+    else
+        print(string.format("[MenuController] Unhandled option '%s' in scene '%s'", option, scene.name))
+    end
+
     if scene.name == 'mainMenu' then
         if option == "Start Game" then
             sceneManager.switchScene('game')
@@ -24,13 +67,38 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         end
     elseif scene.name == 'multiplayerMenu' then
         if option == "Host Game" then
-            print("[MultiplayerMenu] Hosting a game...")
-            -- Add hosting logic here
+            sceneManager.switchScene('hostGameMenu')
         elseif option == "Join Game" then
-            print("[MultiplayerMenu] Joining a game...")
-            -- Add joining logic here
+            sceneManager.switchScene('joinGameMenu')
+
         elseif option == "Back" then
             sceneManager.switchScene('mainMenu')
+        end
+    elseif scene.name == 'multiplayerMenu' then
+        if option == "Host Game" then
+            sceneManager.switchScene('hostGameMenu')
+        elseif option == "Join Game" then
+            sceneManager.switchScene('joinGameMenu')
+
+        elseif option == "Back" then
+            sceneManager.switchScene('mainMenu')
+        end
+
+    elseif scene.name == 'hostGameMenu' then
+        if option == "Start Hosting" then
+            print("START HOSTING GAME SERVER")
+        elseif option == "Server Options" then
+            print("NAVIGATE TO SERVER OPTIONS MENU")
+        elseif option == "Back" then
+            sceneManager.switchScene('multiplayerMenu')
+        end
+    elseif scene.name == 'joinGameMenu' then
+        if option == "Connect to IP" then
+            print("NAVIGATE TO IP INPUT MENU")
+        elseif option == "Recent Servers" then
+            print("NAVIGATE TO RECENT SERVERS MENU")
+        elseif option == "Back" then
+            sceneManager.switchScene('multiplayerMenu')
         end
     elseif scene.name == 'pauseMenu' then
         if option == "Resume" then
@@ -53,31 +121,22 @@ function menuController.handleInput(key, scene, sceneManager)
         return
     end
 
-    -- Initialize selectedOption if it doesn't exist
+    -- Initialize selectedOption if missing
     if not scene.selectedOption then
         scene.selectedOption = 1
     end
 
     if key == menuKeybindings.down then
-        -- Move down, wrapping around to the top
-        scene.selectedOption = scene.selectedOption + 1
-        if scene.selectedOption > #scene.options then
-            scene.selectedOption = 1
-        end
-        print(string.format("[Debug] Moved down to option: %s", scene.options[scene.selectedOption]))
-
+        scene.selectedOption = (scene.selectedOption % #scene.options) + 1
     elseif key == menuKeybindings.up then
-        -- Move up, wrapping around to the bottom
-        scene.selectedOption = scene.selectedOption - 1
-        if scene.selectedOption < 1 then
-            scene.selectedOption = #scene.options
-        end
-        print(string.format("[Debug] Moved up to option: %s", scene.options[scene.selectedOption]))
-
+        scene.selectedOption = (scene.selectedOption - 2) % #scene.options + 1
     elseif key == menuKeybindings.select then
         local selectedOption = scene.options[scene.selectedOption]
-        print(string.format("[Debug] Selected option: %s", selectedOption))
         menuController.handleOptionSelected(selectedOption, scene, sceneManager)
+    elseif key == menuKeybindings.exit then
+        if scene.name == "hostGameMenu" or scene.name == "joinGameMenu" or scene.name == "serverOptionsMenu" then
+            sceneManager.switchScene("multiplayerMenu")
+        end
     end
 end
 

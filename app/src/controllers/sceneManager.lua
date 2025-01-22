@@ -17,6 +17,15 @@ local sceneManager = {
     pendingScene = nil
 }
 
+local menuScenes = {
+    mainMenu = true,
+    multiplayerMenu = true,
+    pauseMenu = true,
+    hostGameMenu = true,
+    joinGameMenu = true,
+    serverOptionsMenu = true
+}
+
 -- Grouped logging variables
 local lastMessage = nil
 local lastMessageCount = 0
@@ -83,6 +92,9 @@ function sceneManager.initialize()
     sceneManager.addScene('mainMenu', menuModel.createMainMenu())
     sceneManager.addScene('pauseMenu', menuModel.createPauseMenu())
     sceneManager.addScene('multiplayerMenu', menuModel.createMultiplayerMenu())
+    sceneManager.addScene('hostGameMenu', menuModel.createHostGameMenu())
+    sceneManager.addScene('joinGameMenu', menuModel.createJoinGameMenu())
+    sceneManager.addScene('serverOptionsMenu', menuModel.createServerOptionsMenu())
     sceneManager.addScene('game', menuModel.createGameScene({
         rules = gameMode.rules,
         objectives = gameMode.objectives
@@ -309,11 +321,11 @@ function sceneManager.handleInput(key)
     end
 
     -- Handle scene-specific input
-    if activeScene.name == 'mainMenu' or activeScene.name == 'multiplayerMenu' or activeScene.name == 'pauseMenu' then
-        menuController.handleInput(key, activeScene, sceneManager)
-    else
-        gameController.handleInput(key)
-    end
+    if menuScenes[activeScene.name] then
+    menuController.handleInput(key, activeScene, sceneManager)
+else
+    gameController.handleInput(key)
+end
 end
 
 

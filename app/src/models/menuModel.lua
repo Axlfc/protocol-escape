@@ -5,7 +5,10 @@ local menuModel = {}
 local MENU_OPTIONS = {
     main = { "Start Game", "Multiplayer", "Options", "Exit" },
     pause = { "Resume", "Save", "Back to Main Menu", "Quit" },
-    multiplayer = {"Host Game", "Join Game", "Back"}
+    multiplayer = { "Host Game", "Join Game", "Back" },
+    hostGame = { "Start Hosting", "Server Options", "Back" },
+    joinGame = { "Connect to IP", "Recent Servers", "Back" },
+    serverOptions = { "Max Players: 8", "Port: 12345", "Allow Spectators: Yes", "Back" }
 }
 
 local MENU_LAYOUTS = {
@@ -23,6 +26,21 @@ local MENU_LAYOUTS = {
         backgroundColor = { 0.1, 0.1, 0.3 },
         position = { x = 0, y = 1.7, z = -2 },
         spacing = 0.3
+    },
+    hostGame = {
+        backgroundColor = { 0.2, 0.2, 0.2 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.4
+    },
+    joinGame = {
+        backgroundColor = { 0.2, 0.2, 0.5 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.4
+    },
+    serverOptions = {
+        backgroundColor = { 0.15, 0.15, 0.15 },
+        position = { x = 0, y = 1.7, z = -2 },
+        spacing = 0.4
     }
 }
 
@@ -74,6 +92,18 @@ end
 
 function menuModel.createMultiplayerMenu()
     return menuModel.createMenu("multiplayerMenu", MENU_OPTIONS.multiplayer, MENU_LAYOUTS.multiplayer)
+end
+
+function menuModel.createHostGameMenu()
+    return menuModel.createMenu("hostGameMenu", MENU_OPTIONS.hostGame, MENU_LAYOUTS.hostGame)
+end
+
+function menuModel.createJoinGameMenu()
+    return menuModel.createMenu("joinGameMenu", MENU_OPTIONS.joinGame, MENU_LAYOUTS.joinGame)
+end
+
+function menuModel.createServerOptionsMenu()
+    return menuModel.createMenu("serverOptionsMenu", MENU_OPTIONS.serverOptions, MENU_LAYOUTS.serverOptions)
 end
 
 
