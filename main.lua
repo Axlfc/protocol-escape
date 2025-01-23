@@ -8,6 +8,7 @@ function lovr.load()
     -- Initialize game instance
     gameInstance.initialize()
 
+    networkManager.initConnectionLogging()
 
     -- Set up scenes and switch to the main menu
     sceneManager.initialize()
@@ -19,6 +20,8 @@ function lovr.update(dt)
     -- Update the game instance and propagate updates
     gameInstance.update(dt)
     sceneManager.update(dt)
+
+    -- networkManager.checkPeriodicConnectionLog()
 end
 
 

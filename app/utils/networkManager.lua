@@ -21,6 +21,28 @@ networkManager.callbacks = {}
 networkManager.messageCounters = {}  -- For rate limiting
 networkManager.lastCleanup = os.time()
 
+
+-- Logging function with improved timestamps and context
+local function enhancedLog(level, message, context)
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+    local contextStr = context and " " .. json.encode(context) or ""
+    local formattedMessage = string.format("[NetworkManager][%s][%s]%s %s",
+        timestamp,
+        level:upper(),
+        contextStr,
+        message
+    )
+    print(formattedMessage)
+
+    -- Optional: Log to file for persistent records
+    local logFile = io.open("network_log.txt", "a")
+    if logFile then
+        logFile:write(formattedMessage .. "\n")
+        logFile:close()
+    end
+end
+
+
 -- Enhanced logging
 local function log(level, message, context)
     local timestamp = os.date("%Y-%m-%d %H:%M:%S")
@@ -92,18 +114,77 @@ end
 function networkManager.startServer()
     local success, err = pcall(function()
         networkManager.isServer = true
-        networkManager.server = assert(socket.bind('*', 12345))
+        networkManager.server = assert(socket.bind('*', CONFIG.SERVER_PORT))
         networkManager.server:settimeout(0)
-        print("[NetworkManager] Server Mode Activated")
-        print("[NetworkManager] Server started on port 12345")
-        print("[NetworkManager] Server IP: 127.0.0.1")
+
+        -- Log detailed server startup information
+        enhancedLog("INFO", "Server Mode Activated", {
+            port = CONFIG.SERVER_PORT,
+            max_clients = CONFIG.MAX_CLIENTS,
+            timestamp = os.date("%Y-%m-%d %H:%M:%S")
+        })
+
+        -- Setup client connection tracking
+        networkManager.connections = {}
+        networkManager.clientCounter = 0
     end)
 
     if not success then
-        print("[NetworkManager] Server Initialization Failed:", err)
+        enhancedLog("ERROR", "Server Initialization Failed", {error = err})
         return false, err
     end
     return true
+end
+
+
+function networkManager.acceptNewConnections()
+    if not networkManager.isServer then return end
+
+    local client = networkManager.server:accept()
+    if client then
+        -- Increment and track client connection
+        networkManager.clientCounter = networkManager.clientCounter + 1
+
+        -- Create a unique client identifier
+        local clientId = string.format("Client_%d_%s",
+            networkManager.clientCounter,
+            os.date("%Y%m%d%H%M%S")
+        )
+
+        -- Log detailed client connection
+        enhancedLog("CONNECTION", "New Client Connected", {
+            client_id = clientId,
+            total_connections = networkManager.clientCounter,
+            connection_time = os.date("%Y-%m-%d %H:%M:%S")
+        })
+
+        -- Store client connection details
+        table.insert(networkManager.connections, {
+            socket = client,
+            id = clientId,
+            connected_at = os.time()
+        })
+
+        return client, clientId
+    end
+end
+
+
+function networkManager.getConnectionStatus()
+    if not networkManager.isServer then
+        return {
+            is_server = false,
+            message = "Not running in server mode"
+        }
+    end
+
+    return {
+        is_server = true,
+        port = CONFIG.SERVER_PORT,
+        total_connections = networkManager.clientCounter or 0,
+        max_clients = CONFIG.MAX_CLIENTS,
+        connections = #(networkManager.connections or {})
+    }
 end
 
 
@@ -198,6 +279,32 @@ function networkManager.handleServerShutdown()
 end
 
 
+function networkManager.initConnectionLogging()
+    networkManager.lastConnectionLogTime = os.time()
+end
+
+
+function networkManager.checkPeriodicConnectionLog()
+    if not networkManager.isServer then return end
+
+    local currentTime = os.time()
+    if (networkManager.lastConnectionLogTime or 0) + (CONFIG.CONNECTION_LOG_INTERVAL or 0) <= currentTime then
+        local status = networkManager.getConnectionStatus()
+        local totalConnections = status.total_connections or 0
+        enhancedLog("STATUS", "Server Connection Overview", {
+            port = status.port,
+            max_clients = status.max_clients,
+            total_connections = totalConnections,
+            is_server = status.is_server,
+            connections = status.connections
+        })
+
+        -- Update the last log time
+        networkManager.lastConnectionLogTime = currentTime
+    end
+end
+
+
 function networkManager.handleServerDisconnect()
     if not networkManager.isServer and _G.sceneManager then
         _G.sceneManager.switchScene('mainMenu')
@@ -214,6 +321,14 @@ function networkManager.shutdownServer()
         if networkManager.onDisconnectCallback then
             networkManager.onDisconnectCallback()
         end
+    end
+end
+
+
+function networkManager.periodicConnectionLog()
+    if networkManager.isServer then
+        local status = networkManager.getConnectionStatus()
+        enhancedLog("STATUS", "Server Connection Overview", status)
     end
 end
 
