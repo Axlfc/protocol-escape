@@ -2,6 +2,7 @@
 local socket = require 'socket'
 local json = require 'cjson'
 local networkManager = {}
+local isAcceptingConnections = false
 
 -- Configuration
 local CONFIG = {
@@ -138,26 +139,24 @@ end
 
 
 function networkManager.acceptNewConnections()
-    if not networkManager.isServer then return end
+    if not networkManager.isServer or isAcceptingConnections then return end
+    isAcceptingConnections = true
 
     local client = networkManager.server:accept()
     if client then
         local clientIp, clientPort = client:getpeername()
+        local uniqueId = string.format("%s:%d", clientIp, clientPort)
 
-        -- Check if the client is already tracked
         for _, conn in ipairs(networkManager.connections) do
-            if conn.ip == clientIp and conn.port == clientPort then
-                print("[NetworkManager] Duplicate connection attempt from client", clientIp, clientPort)
+            if conn.uniqueId == uniqueId then
+                print(string.format("[NetworkManager][%s] Duplicate connection from: %s", os.date("%Y-%m-%d %H:%M:%S"), uniqueId))
+                isAcceptingConnections = false
                 return
             end
         end
 
         networkManager.clientCounter = networkManager.clientCounter + 1
-
-        local clientId = string.format("Client_%d_%s",
-            networkManager.clientCounter,
-            os.date("%Y%m%d%H%M%S")
-        )
+        local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
 
         print(string.format("[NetworkManager][%s] New Client Connected", os.date("%Y-%m-%d %H:%M:%S")))
         print(string.format("[NetworkManager] Client ID: %s", clientId))
@@ -167,11 +166,11 @@ function networkManager.acceptNewConnections()
             ip = clientIp,
             port = clientPort,
             id = clientId,
+            uniqueId = uniqueId,
             connected_at = os.time()
         })
-
-        return client, clientId
     end
+    isAcceptingConnections = false
 end
 
 

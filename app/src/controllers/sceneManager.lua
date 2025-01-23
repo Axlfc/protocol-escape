@@ -137,46 +137,54 @@ end
 
 
 function sceneManager.completeTransition()
-    if not sceneManager.transitioning or not sceneManager.pendingScene then
-        return
-    end
+    if sceneManager.transitioning and sceneManager.pendingScene then
+        debugPrint("Completing transition to: " .. sceneManager.pendingScene)
+        if _G.networkManager and _G.networkManager.isServer then
+            print("[SceneManager] Avoiding duplicate connection calls during transition")
+        end
+        -- Proceed with transition...
 
-    debugPrint("Completing transition to: " .. sceneManager.pendingScene)
+        if not sceneManager.transitioning or not sceneManager.pendingScene then
+            return
+        end
 
-    -- Store previous scene if needed
-    if sceneManager.currentScene then
-        debugPrint("Unloading current scene: " .. sceneManager.currentScene.name)
-        sceneManager.previousScene = sceneManager.currentScene.name
-        -- Ensure unload is called and catch any errors
+        debugPrint("Completing transition to: " .. sceneManager.pendingScene)
+
+        -- Store previous scene if needed
+        if sceneManager.currentScene then
+            debugPrint("Unloading current scene: " .. sceneManager.currentScene.name)
+            sceneManager.previousScene = sceneManager.currentScene.name
+            -- Ensure unload is called and catch any errors
+            local success, err = pcall(function()
+                sceneManager.currentScene:unload()
+            end)
+            if not success then
+                debugPrint("Error unloading scene: " .. tostring(err))
+            end
+            sceneManager.currentScene = nil  -- Clear current scene reference
+        end
+
+        -- Switch to new scene
+        debugPrint("Loading new scene: " .. sceneManager.pendingScene)
+        sceneManager.currentScene = sceneManager.scenes[sceneManager.pendingScene]
+        local messages = sceneManager.pollMessages()
+
+        -- Ensure load is called and catch any errors
         local success, err = pcall(function()
-            sceneManager.currentScene:unload()
+            sceneManager.currentScene:load(messages)
         end)
         if not success then
-            debugPrint("Error unloading scene: " .. tostring(err))
+            debugPrint("Error loading scene: " .. tostring(err))
         end
-        sceneManager.currentScene = nil  -- Clear current scene reference
+
+        -- Start fade in
+        fade:startFadeIn()
+
+        -- Reset transition state
+        sceneManager.transitioning = false
+        sceneManager.pendingScene = nil
+        debugPrint("Transition complete")
     end
-
-    -- Switch to new scene
-    debugPrint("Loading new scene: " .. sceneManager.pendingScene)
-    sceneManager.currentScene = sceneManager.scenes[sceneManager.pendingScene]
-    local messages = sceneManager.pollMessages()
-
-    -- Ensure load is called and catch any errors
-    local success, err = pcall(function()
-        sceneManager.currentScene:load(messages)
-    end)
-    if not success then
-        debugPrint("Error loading scene: " .. tostring(err))
-    end
-
-    -- Start fade in
-    fade:startFadeIn()
-
-    -- Reset transition state
-    sceneManager.transitioning = false
-    sceneManager.pendingScene = nil
-    debugPrint("Transition complete")
 end
 
 function sceneManager.switchScene(name, preserveState)
