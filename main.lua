@@ -16,12 +16,21 @@ function lovr.load()
 end
 
 
+
 function lovr.update(dt)
-    -- Update the game instance and propagate updates
     gameInstance.update(dt)
     sceneManager.update(dt)
 
-    -- networkManager.checkPeriodicConnectionLog()
+    if networkManager.isServer then
+        networkManager.acceptNewConnections()
+    else
+        local statusChannel = lovr.thread.getChannel('networkStatus')
+        local status = statusChannel:pop()
+        if status == "DISCONNECTED" then
+            print("[NetworkManager] Disconnection detected")
+            networkManager.handleServerDisconnect(sceneManager)  -- Pass sceneManager explicitly
+        end
+    end
 end
 
 

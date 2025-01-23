@@ -142,25 +142,30 @@ function networkManager.acceptNewConnections()
 
     local client = networkManager.server:accept()
     if client then
-        -- Increment and track client connection
+        local clientIp, clientPort = client:getpeername()
+
+        -- Check if the client is already tracked
+        for _, conn in ipairs(networkManager.connections) do
+            if conn.ip == clientIp and conn.port == clientPort then
+                print("[NetworkManager] Duplicate connection attempt from client", clientIp, clientPort)
+                return
+            end
+        end
+
         networkManager.clientCounter = networkManager.clientCounter + 1
 
-        -- Create a unique client identifier
         local clientId = string.format("Client_%d_%s",
             networkManager.clientCounter,
             os.date("%Y%m%d%H%M%S")
         )
 
-        -- Log detailed client connection
-        enhancedLog("CONNECTION", "New Client Connected", {
-            client_id = clientId,
-            total_connections = networkManager.clientCounter,
-            connection_time = os.date("%Y-%m-%d %H:%M:%S")
-        })
+        print(string.format("[NetworkManager][%s] New Client Connected", os.date("%Y-%m-%d %H:%M:%S")))
+        print(string.format("[NetworkManager] Client ID: %s", clientId))
 
-        -- Store client connection details
         table.insert(networkManager.connections, {
             socket = client,
+            ip = clientIp,
+            port = clientPort,
             id = clientId,
             connected_at = os.time()
         })
@@ -170,27 +175,76 @@ function networkManager.acceptNewConnections()
 end
 
 
-function networkManager.getConnectionStatus()
-    if not networkManager.isServer then
-        return {
-            is_server = false,
-            message = "Not running in server mode"
-        }
+function networkManager.checkConnections()
+    print("[NetworkManager] Active connections:")
+    for _, conn in ipairs(networkManager.connections) do
+        print(string.format(" - Client ID: %s, IP: %s, Port: %d", conn.id, conn.ip, conn.port))
     end
+end
 
+
+function networkManager.getConnectionStatus()
     return {
-        is_server = true,
+        is_server = networkManager.isServer,
         port = CONFIG.SERVER_PORT,
-        total_connections = networkManager.clientCounter or 0,
+        total_connections = networkManager.clientCounter,
         max_clients = CONFIG.MAX_CLIENTS,
-        connections = #(networkManager.connections or {})
+        connections = #networkManager.connections
     }
+end
+
+
+function networkManager.setupConnectionMonitorThread()
+    local threadCode = [[
+        local socket = require 'socket'
+        local thread = require 'lovr.thread'
+
+        local statusChannel = thread.getChannel('networkStatus')
+        local paramsChannel = thread.getChannel('connectionParams')
+
+        local host = paramsChannel:pop()
+        local port = paramsChannel:pop()
+
+        local function monitorConnection(host, port)
+            local client = socket.tcp()
+            client:settimeout(1)
+
+            local success, connectErr = pcall(function()
+                client:connect(host, port)
+            end)
+
+            if not success then
+                statusChannel:push("DISCONNECTED")
+                return
+            end
+
+            while true do
+                local _, receiveErr = client:receive()
+                if receiveErr == "closed" then
+                    statusChannel:push("DISCONNECTED")
+                    break
+                end
+                -- Use socket.sleep instead of lovr.thread.sleep
+                socket.sleep(1)
+            end
+        end
+
+        monitorConnection(host, port)
+    ]]
+
+    -- Create channels
+    networkManager.statusChannel = lovr.thread.getChannel('networkStatus')
+    networkManager.paramsChannel = lovr.thread.getChannel('connectionParams')
+
+    -- Create and start monitoring thread
+    networkManager.connectionThread = lovr.thread.newThread(threadCode)
+    networkManager.connectionThread:start()
 end
 
 
 function networkManager.connectToServer(host)
     if not host then
-        log("ERROR", "Invalid host provided")
+        print("[NetworkManager] Invalid host")
         return false, "Invalid host"
     end
 
@@ -200,13 +254,17 @@ function networkManager.connectToServer(host)
 
     local success, err = networkManager.client:connect(host, CONFIG.SERVER_PORT)
     if success then
-        log("INFO", "Client Connection Established")
-        print(string.format("[NetworkManager] Connected to Server: %s", host))
-        print(string.format("[NetworkManager] Server Port: %d", CONFIG.SERVER_PORT))
+        -- Ensure channels exist before pushing
+        local statusChannel = lovr.thread.getChannel('networkStatus')
+        local paramsChannel = lovr.thread.getChannel('connectionParams')
+
+        paramsChannel:push(host)
+        paramsChannel:push(CONFIG.SERVER_PORT)
+
+        networkManager.setupConnectionMonitorThread()
         return true
     else
-        log("ERROR", "Connection Failed", {host = host, error = err})
-        print(string.format("[NetworkManager] Client Connection to %s Failed", host))
+        print("[NetworkManager] Connection failed:", err)
         networkManager.client = nil
         return false, err
     end
@@ -228,13 +286,12 @@ end
 
 
 function networkManager.pollMessages()
-    if networkManager.client then
-        local line, err = networkManager.client:receive()
-        if line == "SERVER_QUIT" then
-            networkManager.handleServerDisconnect()
-        elseif err == "closed" then
-            networkManager.handleServerDisconnect()
-        end
+    if not networkManager.client then return end
+
+    local line, err = networkManager.client:receive()
+    if err == "closed" or line == "SERVER_QUIT" then
+        print("[NetworkManager] Connection lost or server quit")
+        networkManager.handleServerDisconnect()
     end
 end
 
@@ -242,27 +299,28 @@ end
 function networkManager.stop()
     local success, err = pcall(function()
         if networkManager.isServer then
+            -- Broadcast server shutdown to clients
             for _, conn in ipairs(networkManager.connections) do
-                conn:close()
+                pcall(function()
+                    conn.socket:send("SERVER_QUIT\n")
+                    conn.socket:close()
+                end)
             end
             networkManager.server:close()
-            log("INFO", "Server stopped")
         elseif networkManager.client then
+            networkManager.client:send("CLIENT_QUIT\n")
             networkManager.client:close()
-            log("INFO", "Disconnected from server")
         end
 
         networkManager.server = nil
         networkManager.client = nil
         networkManager.connections = {}
-        networkManager.messageCounters = {}
     end)
 
     if not success then
-        log("ERROR", "Error during shutdown", {error = err})
-        return false, err
+        print("[NetworkManager] Shutdown error: " .. tostring(err))
     end
-    return true
+    return success
 end
 
 
@@ -285,43 +343,49 @@ end
 
 
 function networkManager.checkPeriodicConnectionLog()
-    if not networkManager.isServer then return end
-
-    local currentTime = os.time()
-    if (networkManager.lastConnectionLogTime or 0) + (CONFIG.CONNECTION_LOG_INTERVAL or 0) <= currentTime then
+    if networkManager.isServer then
         local status = networkManager.getConnectionStatus()
-        local totalConnections = status.total_connections or 0
-        enhancedLog("STATUS", "Server Connection Overview", {
-            port = status.port,
-            max_clients = status.max_clients,
-            total_connections = totalConnections,
-            is_server = status.is_server,
-            connections = status.connections
-        })
-
-        -- Update the last log time
-        networkManager.lastConnectionLogTime = currentTime
+        enhancedLog("STATUS", "Server Connection Overview", status)
     end
 end
 
 
-function networkManager.handleServerDisconnect()
-    if not networkManager.isServer and _G.sceneManager then
-        _G.sceneManager.switchScene('mainMenu')
+function networkManager.handleServerDisconnect(sceneManager)
+    print("[NetworkManager] Server has disconnected. Returning to main menu.")
+
+    -- Reset client connection
+    if networkManager.client then
+        networkManager.client:close()
+        networkManager.client = nil
+    end
+
+    -- Notify sceneManager to return to the main menu
+    if sceneManager then
+        sceneManager.switchScene('mainMenu')
+    else
+        print("[NetworkManager] SceneManager not provided. Unable to switch scenes.")
     end
 end
 
 
 function networkManager.shutdownServer()
-    if networkManager.isServer then
-        print("[NetworkManager] Shutting down server.")
-        networkManager.connectionStatus = false
+    print("[NetworkManager] Shutting down server...")
 
-        -- Trigger disconnect callback if set
-        if networkManager.onDisconnectCallback then
-            networkManager.onDisconnectCallback()
-        end
+    -- Notify all clients
+    for _, conn in ipairs(networkManager.connections) do
+        pcall(function()
+            conn.socket:send("SERVER_SHUTDOWN\n")
+        end)
     end
+
+    -- Close all sockets
+    for _, conn in ipairs(networkManager.connections) do
+        conn.socket:close()
+    end
+    networkManager.server:close()
+    networkManager.connections = {}
+
+    print("[NetworkManager] Server shut down successfully.")
 end
 
 
