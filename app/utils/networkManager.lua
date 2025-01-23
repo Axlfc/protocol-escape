@@ -143,22 +143,28 @@ function networkManager.acceptNewConnections()
     isAcceptingConnections = true
 
     local client = networkManager.server:accept()
+
     if client then
         local clientIp, clientPort = client:getpeername()
-        local uniqueId = string.format("%s:%d", clientIp, clientPort)
+        local currentTime = os.time()
+
+        -- Check for existing connections within the same second
+        local connectionCountThisSecond = 0
 
         for _, conn in ipairs(networkManager.connections) do
-            if conn.uniqueId == uniqueId then
-                print(string.format("[NetworkManager][%s] Duplicate connection from: %s", os.date("%Y-%m-%d %H:%M:%S"), uniqueId))
-                isAcceptingConnections = false
-                return
+            if conn.connected_at == currentTime then
+
+                connectionCountThisSecond = connectionCountThisSecond + 1
             end
         end
 
+        local uniqueId = string.format("%s:%d:%s:%d", clientIp, clientPort, currentTime, connectionCountThisSecond + 1)
+
         networkManager.clientCounter = networkManager.clientCounter + 1
+
         local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
 
-        print(string.format("[NetworkManager][%s] New Client Connected", os.date("%Y-%m-%d %H:%M:%S")))
+        print(string.format("[NetworkManager][%s] New Client Connected: %s", os.date("%Y-%m-%d %H:%M:%S"), uniqueId))
         print(string.format("[NetworkManager] Client ID: %s", clientId))
 
         table.insert(networkManager.connections, {
@@ -167,7 +173,7 @@ function networkManager.acceptNewConnections()
             port = clientPort,
             id = clientId,
             uniqueId = uniqueId,
-            connected_at = os.time()
+            connected_at = currentTime
         })
     end
     isAcceptingConnections = false
