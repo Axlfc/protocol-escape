@@ -5,6 +5,7 @@ local networkManager = require 'app.utils.networkManager'
 local lastAcceptTime = 0
 local acceptInterval = 0.1 -- seconds
 
+
 function lovr.load()
     -- Initialize game instance
     gameInstance.initialize()
@@ -15,7 +16,6 @@ function lovr.load()
     sceneManager.initialize()
     sceneManager.switchScene('mainMenu')
 end
-
 
 
 function lovr.update(dt)
@@ -35,6 +35,7 @@ function lovr.update(dt)
             sceneManager.switchScene('joinGameMenu')
         elseif status == "DISCONNECTED" then
             print("[NetworkManager] Disconnection detected")
+            networkManager.notifyServerOfDisconnect()
             networkManager.handleServerDisconnect(sceneManager)
         end
     end
@@ -56,5 +57,7 @@ end
 function lovr.quit()
     if networkManager.isServer then
         networkManager.shutdownServer()
+    else
+        networkManager.notifyServerOfDisconnect()
     end
 end

@@ -460,4 +460,16 @@ function networkManager.setDisconnectCallback(callback)
 end
 
 
+function networkManager.notifyServerOfDisconnect()
+    if networkManager.client then
+        -- Send a disconnection notification to the server
+        pcall(function()
+            networkManager.client:send("CLIENT_DISCONNECT\n")
+            networkManager.client:close()
+            networkManager.client = nil
+        end)
+    end
+end
+
+
 return networkManager
