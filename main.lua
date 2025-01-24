@@ -32,7 +32,7 @@ function lovr.update(dt)
         local status = statusChannel:pop()
         if status == "SERVER_FULL" then
             print("[NetworkManager] Server full, switching to joinGameMenu")
-            sceneManager.switchScene('joinGameMenu')
+            sceneManager.switchScene('joinGameMenu') -- Switch to joinGameMenu directly
         elseif status == "DISCONNECTED" then
             print("[NetworkManager] Disconnection detected")
             networkManager.notifyServerOfDisconnect()

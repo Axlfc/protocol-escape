@@ -149,20 +149,22 @@ function networkManager.acceptNewConnections()
     while true do
         -- Always attempt to accept a client connection
         local client = networkManager.server:accept()
-        if not client or not lastAcceptedClient then
-            -- No more pending connections
-            break
-        end
+        if not client or not lastAcceptedClient then break end
 
-        -- Retrieve client information
         local clientIp, clientPort = client:getpeername()
         local uniqueId = string.format("%s:%d", clientIp, clientPort)
 
         -- Check if the connection is already processed
         if #networkManager.connections >= CONFIG.MAX_CLIENTS then
             print(string.format("[NetworkManager] Rejecting connection from %s:%d (Server full)", clientIp, clientPort))
-            client:send("SERVER_FULL\n")
-            client:close()
+            pcall(function()
+                client:send("SERVER_FULL\n")
+                client:close()
+            end)
+            enhancedLog("WARN", "Client rejected due to server being full", {
+                ip = clientIp,
+                port = clientPort
+            })
         elseif networkManager.processedConnections[clientPort] == clientPort then
             print(string.format("[DEBUG] Duplicate connection from %s:%d. Closing client.", clientIp, clientPort))
             client:close()
