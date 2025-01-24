@@ -2,7 +2,8 @@
 local sceneManager = require 'app.src.controllers.sceneManager'
 local gameInstance = require 'app.src.models.gameInstance'
 local networkManager = require 'app.utils.networkManager'
-
+local lastAcceptTime = 0
+local acceptInterval = 0.1 -- seconds
 
 function lovr.load()
     -- Initialize game instance
@@ -21,14 +22,20 @@ function lovr.update(dt)
     gameInstance.update(dt)
     sceneManager.update(dt)
 
-    if networkManager.isServer then
+    local currentTime = os.time()
+
+    if networkManager.isServer and currentTime - lastAcceptTime >= acceptInterval then
         networkManager.acceptNewConnections()
+        lastAcceptTime = currentTime
     else
         local statusChannel = lovr.thread.getChannel('networkStatus')
         local status = statusChannel:pop()
-        if status == "DISCONNECTED" then
+        if status == "SERVER_FULL" then
+            print("[NetworkManager] Server full, switching to joinGameMenu")
+            sceneManager.switchScene('joinGameMenu')
+        elseif status == "DISCONNECTED" then
             print("[NetworkManager] Disconnection detected")
-            networkManager.handleServerDisconnect(sceneManager)  -- Pass sceneManager explicitly
+            networkManager.handleServerDisconnect(sceneManager)
         end
     end
 end

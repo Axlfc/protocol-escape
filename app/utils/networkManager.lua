@@ -2,7 +2,8 @@
 local socket = require 'socket'
 local json = require 'cjson'
 local networkManager = {}
-local isAcceptingConnections = false
+local lastAcceptedClient = true
+
 
 -- Configuration
 local CONFIG = {
@@ -10,7 +11,7 @@ local CONFIG = {
     CLIENT_TIMEOUT = 5,
     MAX_MESSAGE_SIZE = 1024 * 10,  -- 10KB limit
     MESSAGE_RATE_LIMIT = 100,      -- messages per second
-    MAX_CLIENTS = 100
+    MAX_CLIENTS = 2
 }
 
 -- State management
@@ -139,44 +140,62 @@ end
 
 
 function networkManager.acceptNewConnections()
-    if not networkManager.isServer or isAcceptingConnections then return end
-    isAcceptingConnections = true
+    if not networkManager.isServer then return end
 
-    local client = networkManager.server:accept()
+    -- Ensure `processedConnections` is initialized
+    networkManager.processedConnections = networkManager.processedConnections or {}
 
-    if client then
-        local clientIp, clientPort = client:getpeername()
-        local currentTime = os.time()
-
-        -- Check for existing connections within the same second
-        local connectionCountThisSecond = 0
-
-        for _, conn in ipairs(networkManager.connections) do
-            if conn.connected_at == currentTime then
-
-                connectionCountThisSecond = connectionCountThisSecond + 1
-            end
+    -- Accept pending connections in a loop to handle all at once
+    while true do
+        -- Always attempt to accept a client connection
+        local client = networkManager.server:accept()
+        if not client or not lastAcceptedClient then
+            -- No more pending connections
+            break
         end
 
-        local uniqueId = string.format("%s:%d:%s:%d", clientIp, clientPort, currentTime, connectionCountThisSecond + 1)
+        -- Retrieve client information
+        local clientIp, clientPort = client:getpeername()
+        local uniqueId = string.format("%s:%d", clientIp, clientPort)
 
-        networkManager.clientCounter = networkManager.clientCounter + 1
+        -- Check if the connection is already processed
+        if #networkManager.connections >= CONFIG.MAX_CLIENTS then
+            print(string.format("[NetworkManager] Rejecting connection from %s:%d (Server full)", clientIp, clientPort))
+            client:send("SERVER_FULL\n")
+            client:close()
+        elseif networkManager.processedConnections[clientPort] == clientPort then
+            print(string.format("[DEBUG] Duplicate connection from %s:%d. Closing client.", clientIp, clientPort))
+            client:close()
+        else
+            -- Register the connection
+            networkManager.clientCounter = networkManager.clientCounter + 1
+            local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
 
-        local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
+            -- Log the new connection
+            enhancedLog("INFO", "New Client Connected", {
+                clientId = clientId,
+                ip = clientIp,
+                port = clientPort,
+                uniqueId = uniqueId,
+                total_connections = #networkManager.connections + 1
+            })
 
-        print(string.format("[NetworkManager][%s] New Client Connected: %s", os.date("%Y-%m-%d %H:%M:%S"), uniqueId))
-        print(string.format("[NetworkManager] Client ID: %s", clientId))
+            -- Store the connection
+            table.insert(networkManager.connections, {
+                socket = client,
+                ip = clientIp,
+                port = clientPort,
+                id = clientId,
+                uniqueId = uniqueId,
+                connected_at = os.time()
+            })
 
-        table.insert(networkManager.connections, {
-            socket = client,
-            ip = clientIp,
-            port = clientPort,
-            id = clientId,
-            uniqueId = uniqueId,
-            connected_at = currentTime
-        })
+            -- Mark this IP as processed
+            networkManager.processedConnections[clientIp] = true
+            lastAcceptedClient = false
+        end
     end
-    isAcceptingConnections = false
+    lastAcceptedClient = true
 end
 
 
@@ -253,15 +272,23 @@ function networkManager.connectToServer(host)
         return false, "Invalid host"
     end
 
+    -- Ensure previous connection thread is stopped
+    if networkManager.connectionThread and networkManager.connectionThread:isRunning() then
+        networkManager.connectionThread:stop()
+    end
+
     networkManager.isServer = false
     networkManager.client = socket.tcp()
     networkManager.client:settimeout(CONFIG.CLIENT_TIMEOUT)
 
     local success, err = networkManager.client:connect(host, CONFIG.SERVER_PORT)
     if success then
-        -- Ensure channels exist before pushing
         local statusChannel = lovr.thread.getChannel('networkStatus')
         local paramsChannel = lovr.thread.getChannel('connectionParams')
+
+        -- Clear any existing channel data
+        while statusChannel:pop() do end
+        while paramsChannel:pop() do end
 
         paramsChannel:push(host)
         paramsChannel:push(CONFIG.SERVER_PORT)
@@ -285,6 +312,25 @@ function networkManager.broadcast(message)
     if message == "SCENE_TRANSITION" then
         for _, conn in ipairs(networkManager.connections) do
             conn:send("SERVER_SCENE_CHANGE\n")
+        end
+    end
+end
+
+
+function networkManager.pollConnections()
+    for i = #networkManager.connections, 1, -1 do
+        local conn = networkManager.connections[i]
+        local _, err = conn.socket:receive()
+
+        -- Check if the client disconnected
+        if err == "closed" then
+            print(string.format("[DEBUG] Client %s:%d disconnected.", conn.ip, conn.port))
+            table.remove(networkManager.connections, i)
+
+            -- Allow reconnection by removing processed flag
+            if conn.uniqueId then
+                networkManager.processedConnections[conn.uniqueId] = nil
+            end
         end
     end
 end
@@ -358,17 +404,24 @@ end
 function networkManager.handleServerDisconnect(sceneManager)
     print("[NetworkManager] Server has disconnected. Returning to main menu.")
 
+    -- Notify clients
+    if networkManager.isServer then
+        for _, conn in ipairs(networkManager.connections) do
+            pcall(function()
+                conn.socket:send("SERVER_SHUTDOWN\n")
+            end)
+        end
+    end
+
     -- Reset client connection
     if networkManager.client then
         networkManager.client:close()
         networkManager.client = nil
     end
 
-    -- Notify sceneManager to return to the main menu
+    -- Notify sceneManager
     if sceneManager then
         sceneManager.switchScene('mainMenu')
-    else
-        print("[NetworkManager] SceneManager not provided. Unable to switch scenes.")
     end
 end
 
