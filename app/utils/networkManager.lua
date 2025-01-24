@@ -344,7 +344,11 @@ function networkManager.pollMessages()
     local line, err = networkManager.client:receive()
     if err == "closed" or line == "SERVER_QUIT" then
         print("[NetworkManager] Connection lost or server quit")
+        networkManager.resetClient() -- Ensure the client is reset
         networkManager.handleServerDisconnect()
+    elseif err then
+        print("[NetworkManager] Error while receiving message:", err)
+        networkManager.resetClient() -- Handle other errors
     end
 end
 
@@ -386,6 +390,26 @@ function networkManager.handleServerShutdown()
         if _G.sceneManager then
             _G.sceneManager.returnToMainMenu("Server Initiated Shutdown")
         end
+    end
+end
+
+
+function networkManager.resetClient()
+    if networkManager.client then
+        -- Try to close the client socket safely
+        local success, err = pcall(function()
+            networkManager.client:close()
+        end)
+
+        if not success then
+            print(string.format("[NetworkManager] Error closing client socket: %s", err))
+        end
+
+        -- Set the client to nil to prevent further usage
+        networkManager.client = nil
+
+        -- Log the reset operation
+        print("[NetworkManager] Client connection has been reset.")
     end
 end
 
@@ -463,7 +487,7 @@ end
 
 
 function networkManager.notifyServerOfDisconnect()
-    if networkManager.client then
+    if not isServer then
         -- Send a disconnection notification to the server
         pcall(function()
             networkManager.client:send("CLIENT_DISCONNECT\n")

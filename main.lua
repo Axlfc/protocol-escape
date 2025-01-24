@@ -59,5 +59,6 @@ function lovr.quit()
         networkManager.shutdownServer()
     else
         networkManager.notifyServerOfDisconnect()
+        networkManager.resetClient()
     end
 end

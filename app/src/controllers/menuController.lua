@@ -124,6 +124,8 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         elseif option == "Quit" then
             lovr.event.quit()
         end
+    else
+        print(string.format("[MenuController] Unhandled option '%s' in scene '%s'", option, scene.name))
     end
 end
 
