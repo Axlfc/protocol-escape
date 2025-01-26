@@ -9,9 +9,10 @@ local lastAcceptedClient = true
 local CONFIG = {
     SERVER_PORT = 12345,
     CLIENT_TIMEOUT = 5,
-    MAX_MESSAGE_SIZE = 1024 * 10,  -- 10KB limit
-    MESSAGE_RATE_LIMIT = 100,      -- messages per second
-    MAX_CLIENTS = 2
+    MAX_MESSAGE_SIZE = 1024 * 10,
+    MESSAGE_RATE_LIMIT = 100,
+    MAX_CLIENTS = 2,
+    ALLOW_DYNAMIC_SLOTS = true  -- New flag to enable dynamic slot management
 }
 
 -- State management
@@ -326,12 +327,27 @@ function networkManager.pollConnections()
 
         -- Check if the client disconnected
         if err == "closed" then
-            print(string.format("[DEBUG] Client %s:%d disconnected.", conn.ip, conn.port))
+            enhancedLog("WARN", "Client Disconnected", {
+                clientId = conn.id,
+                ip = conn.ip,
+                port = conn.port,
+                connected_duration = os.time() - conn.connected_at
+            })
+
+            -- Remove the connection
             table.remove(networkManager.connections, i)
 
             -- Allow reconnection by removing processed flag
             if conn.uniqueId then
                 networkManager.processedConnections[conn.uniqueId] = nil
+            end
+
+            -- Optional: Dynamically adjust max clients if enabled
+            if CONFIG.ALLOW_DYNAMIC_SLOTS then
+                CONFIG.MAX_CLIENTS = math.max(2, #networkManager.connections + 1)
+                enhancedLog("INFO", "Dynamic Client Slot Adjustment", {
+                    new_max_clients = CONFIG.MAX_CLIENTS
+                })
             end
         end
     end
