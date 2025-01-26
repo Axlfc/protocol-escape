@@ -10,16 +10,6 @@
 
 ---
 
-## Features
-
-- 🎮 **Rich VR Interactivity**: Supports multiple VR platforms for a fully immersive escape room experience.
-- 🛠️ **Modular Design**: Decoupled game components allow for easy expansion and maintenance.
-- 🔥 **Custom Rendering**: Advanced graphics powered by LÖVR's shader system.
-- 📊 **Data-Driven Menus**: Easily update menus and UI without diving into the code.
-- ⚙️ **Physics-Based Gameplay**: Realistic interactions and puzzles.
-
----
-
 ## Architecture
 
 The game's architecture is organized into several components:
