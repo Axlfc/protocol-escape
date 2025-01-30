@@ -120,13 +120,13 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         end
     elseif scene.name == 'pauseMenu' then
         if option == "Quit" then
-            print("[MenuController] Handling quit option in pauseMenu")
-            if networkManager and type(networkManager.notifyServerDisconnect) == "function" then
-                print("[MenuController] Calling notifyServerDisconnect...")
-                networkManager.notifyServerDisconnect()
-            else
-                print("[MenuController] Error: notifyServerDisconnect function not found in networkManager")
+            -- Ensure UI is cleaned up before disconnecting
+            sceneManager.clearOverlayScene()
+
+            if networkManager then
+                networkManager.notifyServerOfDisconnect()
             end
+
             lovr.event.quit()
         elseif option == "Resume" then
             sceneManager.clearOverlayScene()

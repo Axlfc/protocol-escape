@@ -2,7 +2,6 @@
 local socket = require 'socket'
 local json = require 'cjson'
 local networkManager = {}
-local lastAcceptedClient = true
 
 
 -- Configuration
@@ -25,41 +24,38 @@ networkManager.callbacks = {}
 networkManager.messageCounters = {}
 networkManager.lastCleanup = os.time()
 networkManager.slots = {}
+networkManager.clientSlots = {}
+networkManager.maxSlotId = 0
+networkManager.pairedConnections = {}  -- Track connection pairs by IP
 
 
-local function initializeSlots()
-    networkManager.slots = {
-        available = {},    -- Available slot numbers
-        occupied = {},     -- Currently occupied slots
-        lastAssigned = 0,  -- Last assigned slot number
-        metadata = {}      -- Metadata for each slot (connection time, client info, etc.)
-    }
-
-    -- Initialize available slots
-    for i = 1, CONFIG.MAX_CLIENTS do
-        table.insert(networkManager.slots.available, i)
-    end
+function networkManager.initializeSlotSystem()
+    networkManager.clientSlots = {}
+    networkManager.maxSlotId = 0
+    networkManager.pairedConnections = {}
+    networkManager.ghostTimeout = 5  -- Seconds to wait before considering a client as ghost
 end
 
 
--- Get next available slot
-local function getNextAvailableSlot()
-    if #networkManager.slots.available > 0 then
-        return table.remove(networkManager.slots.available, 1)
+function networkManager.handlePairedConnection(clientIp, clientPort)
+    -- Use the existing lastPortPerIP variable (fix the typo)
+    local isSequentialPort = false
+    if networkManager.lastPortPerIP[clientIp] then
+        local lastPort = networkManager.lastPortPerIP[clientIp]
+        isSequentialPort = (clientPort == lastPort + 1)
     end
-    return nil
-end
 
-
--- Release slot back to pool
-local function releaseSlot(slotNumber)
-    if networkManager.slots.occupied[slotNumber] then
-        networkManager.slots.occupied[slotNumber] = nil
-        networkManager.slots.metadata[slotNumber] = nil
-        table.insert(networkManager.slots.available, slotNumber)
-        table.sort(networkManager.slots.available)  -- Keep slots ordered
-        enhancedLog("INFO", "Slot released", {slot = slotNumber})
+    if not networkManager.pairedConnections[clientIp] then
+        networkManager.pairedConnections[clientIp] = {
+            ports = {},
+            slotId = nil
+        }
     end
+
+    local pair = networkManager.pairedConnections[clientIp]
+    table.insert(pair.ports, clientPort)
+
+    return isSequentialPort, pair
 end
 
 
@@ -181,9 +177,13 @@ end
 function networkManager.acceptNewConnections()
     if not networkManager.isServer then return end
 
-    -- Ensure `processedConnections` is initialized
+    -- Initialize slot system if needed
+    if not networkManager.clientSlots then
+        networkManager.initializeSlotSystem()
+    end
+
+    -- Ensure network tracking tables exist
     networkManager.processedConnections = networkManager.processedConnections or {}
-    -- Track last port per IP to detect sequential connections
     networkManager.lastPortPerIP = networkManager.lastPortPerIP or {}
 
     while true do
@@ -193,55 +193,48 @@ function networkManager.acceptNewConnections()
         local clientIp, clientPort = client:getpeername()
         local uniqueId = string.format("%s:%d", clientIp, clientPort)
 
-        -- Check if this is a sequential port from the same IP
-        local isSequentialPort = false
-        if networkManager.lastPortPerIP[clientIp] then
-            local lastPort = networkManager.lastPortPerIP[clientIp]
-            isSequentialPort = (clientPort == lastPort + 1)
-        end
+        -- Handle paired connection logic
+        local isSequentialPort, connectionPair = networkManager.handlePairedConnection(clientIp, clientPort)
 
         if networkManager.processedConnections[clientPort] == clientPort then
             print(string.format("[DEBUG] Duplicate connection from %s:%d. Closing client.", clientIp, clientPort))
             client:close()
         elseif #networkManager.connections >= CONFIG.MAX_CLIENTS * 2 then
-            -- Multiply MAX_CLIENTS by 2 since each client needs two ports
+            -- Account for connection pairs (multiply MAX_CLIENTS by 2)
             print(string.format("[NetworkManager] Rejecting connection from %s:%d (Server full)", clientIp, clientPort))
             pcall(function()
                 client:send("SERVER_FULL\n")
                 client:close()
             end)
-            enhancedLog("WARN", "Client rejected due to server being full", {
-                ip = clientIp,
-                port = clientPort
-            })
 
             local statusChannel = lovr.thread.getChannel('networkStatus')
             statusChannel:push("SERVER_FULL")
             break
         else
-            -- Register the new connection
-            networkManager.clientCounter = isSequentialPort and networkManager.clientCounter or (networkManager.clientCounter + 1)
-            local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
+            -- Only assign new slot for the first connection of a pair
+            local slotId
+            if not isSequentialPort then
+                networkManager.maxSlotId = networkManager.maxSlotId + 1
+                slotId = networkManager.maxSlotId
+                connectionPair.slotId = slotId
 
-            -- Calculate real total connections (counting pairs as one)
-            local realTotalConnections = math.ceil(#networkManager.connections / 2) + (isSequentialPort and 0 or 1)
-
-            -- Log the new connection
-            enhancedLog("INFO", "New Client Connected", {
-                clientId = clientId,
-                ip = clientIp,
-                port = clientPort,
-                uniqueId = uniqueId,
-                total_connections = realTotalConnections,
-                is_sequential = isSequentialPort
-            })
+                networkManager.clientSlots[slotId] = {
+                    lastActivity = os.time(),
+                    clientId = string.format("Client_%d_%s", slotId, os.date("%Y%m%d%H%M%S")),
+                    clientIp = clientIp,
+                    ports = connectionPair.ports
+                }
+            else
+                slotId = connectionPair.slotId
+            end
 
             -- Store the connection
             table.insert(networkManager.connections, {
                 socket = client,
                 ip = clientIp,
                 port = clientPort,
-                id = clientId,
+                id = networkManager.clientSlots[slotId].clientId,
+                slotId = slotId,
                 uniqueId = uniqueId,
                 connected_at = os.time(),
                 is_sequential = isSequentialPort
@@ -252,10 +245,52 @@ function networkManager.acceptNewConnections()
 
             -- Mark this port as processed
             networkManager.processedConnections[clientPort] = clientPort
+
+            enhancedLog("INFO", "Client connection processed", {
+                slotId = slotId,
+                clientId = networkManager.clientSlots[slotId].clientId,
+                ip = clientIp,
+                port = clientPort,
+                isSequential = isSequentialPort
+            })
+
             lastAcceptedClient = false
         end
     end
     lastAcceptedClient = true
+end
+
+
+function networkManager.handleDisconnectionUICleanup(sceneManager)
+    if sceneManager then
+        -- Clear any overlay scenes first
+        if type(sceneManager.clearOverlayScene) == "function" then
+            sceneManager.clearOverlayScene()
+        end
+
+        -- Safe scene transition
+        if type(sceneManager.switchScene) == "function" then
+            sceneManager.switchScene('mainMenu')
+
+            -- Only log if we have access to getCurrentScene
+            if type(sceneManager.getCurrentScene) == "function" then
+                local currentScene = sceneManager.getCurrentScene()
+                if currentScene then
+                    enhancedLog("INFO", "UI cleaned up after disconnection", {
+                        previousScene = currentScene.name
+                    })
+                else
+                    enhancedLog("INFO", "UI cleaned up after disconnection")
+                end
+            else
+                enhancedLog("INFO", "UI cleaned up after disconnection")
+            end
+        else
+            enhancedLog("WARN", "Could not switch scene - sceneManager.switchScene not available")
+        end
+    else
+        enhancedLog("WARN", "Scene cleanup skipped - no sceneManager available")
+    end
 end
 
 
@@ -391,23 +426,56 @@ end
 
 
 function networkManager.cleanupClientConnections(clientIp)
-    -- Clean up lastPortPerIP entry
+    local currentTime = os.time()
+
+    -- Clean up connection tracking
     networkManager.lastPortPerIP[clientIp] = nil
 
-    -- Clean up all processed ports for this IP
-    for port, _ in pairs(networkManager.processedConnections) do
-        -- Find all ports that belong to connections with this IP
-        for i, conn in ipairs(networkManager.connections) do
-            if conn.ip == clientIp and conn.port == port then
-                networkManager.processedConnections[port] = nil
-                break
-            end
+    -- Clean up the paired connection entry
+    if networkManager.pairedConnections[clientIp] then
+        local slotId = networkManager.pairedConnections[clientIp].slotId
+        if slotId then
+            networkManager.clientSlots[slotId] = nil
+            enhancedLog("INFO", "Freed slot for paired connection", {
+                slotId = slotId,
+                clientIp = clientIp
+            })
+        end
+        networkManager.pairedConnections[clientIp] = nil
+    end
+
+    -- Remove all connections for this IP and clean up processed ports
+    for i = #networkManager.connections, 1, -1 do
+        local conn = networkManager.connections[i]
+        if conn.ip == clientIp then
+            networkManager.processedConnections[conn.port] = nil
+            table.remove(networkManager.connections, i)
         end
     end
 
-    enhancedLog("INFO", "Cleaned up connection tracking for client", {
-        ip = clientIp
-    })
+    -- Perform ghost client cleanup
+    for slotId, slot in pairs(networkManager.clientSlots) do
+        if currentTime - slot.lastActivity > networkManager.ghostTimeout then
+            networkManager.clientSlots[slotId] = nil
+            if slot.clientIp then
+                networkManager.pairedConnections[slot.clientIp] = nil
+            end
+            enhancedLog("WARN", "Removed ghost client", {
+                slotId = slotId,
+                inactiveFor = currentTime - slot.lastActivity
+            })
+        end
+    end
+
+    -- Recount active client pairs
+    local activeSlots = 0
+    for _ in pairs(networkManager.clientSlots) do
+        activeSlots = activeSlots + 1
+    end
+
+    if activeSlots == 0 then
+        networkManager.maxSlotId = 0  -- Reset if no active clients
+    end
 end
 
 
@@ -538,27 +606,46 @@ end
 
 
 function networkManager.handleServerDisconnect(sceneManager)
-    print("[NetworkManager] Server has disconnected. Returning to main menu.")
+    enhancedLog("INFO", "Handling server disconnect")
 
-    -- Notify clients
-    if networkManager.isServer then
-        for _, conn in ipairs(networkManager.connections) do
-            pcall(function()
-                conn.socket:send("SERVER_SHUTDOWN\n")
-            end)
-        end
-    end
-
-    -- Reset client connection
+    -- Clean up client connection
     if networkManager.client then
-        networkManager.client:close()
+        pcall(function()
+            networkManager.client:close()
+        end)
         networkManager.client = nil
     end
 
-    -- Notify sceneManager
-    if sceneManager then
-        sceneManager.switchScene('mainMenu')
+    -- Safely handle UI cleanup
+    pcall(function()
+        networkManager.handleDisconnectionUICleanup(sceneManager)
+    end)
+end
+
+
+function networkManager.verifySceneManager(sceneManager)
+    if not sceneManager then
+        return false, "sceneManager is nil"
     end
+
+    local required_functions = {
+        "clearOverlayScene",
+        "switchScene",
+        "getCurrentScene"
+    }
+
+    local missing_functions = {}
+    for _, func_name in ipairs(required_functions) do
+        if type(sceneManager[func_name]) ~= "function" then
+            table.insert(missing_functions, func_name)
+        end
+    end
+
+    if #missing_functions > 0 then
+        return false, "Missing required functions: " .. table.concat(missing_functions, ", ")
+    end
+
+    return true
 end
 
 
