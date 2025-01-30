@@ -11,7 +11,7 @@ local CONFIG = {
     CLIENT_TIMEOUT = 5,
     MAX_MESSAGE_SIZE = 1024 * 10,
     MESSAGE_RATE_LIMIT = 100,
-    MAX_CLIENTS = 2,
+    MAX_CLIENTS = 3,
     ALLOW_DYNAMIC_SLOTS = true  -- New flag to enable dynamic slot management
 }
 
@@ -145,18 +145,28 @@ function networkManager.acceptNewConnections()
 
     -- Ensure `processedConnections` is initialized
     networkManager.processedConnections = networkManager.processedConnections or {}
+    -- Track last port per IP to detect sequential connections
+    networkManager.lastPortPerIP = networkManager.lastPortPerIP or {}
 
-    -- Accept pending connections in a loop to handle all at once
     while true do
-        -- Always attempt to accept a client connection
         local client = networkManager.server:accept()
         if not client or not lastAcceptedClient then break end
 
         local clientIp, clientPort = client:getpeername()
         local uniqueId = string.format("%s:%d", clientIp, clientPort)
 
-        -- Check if the connection is already processed
-        if #networkManager.connections >= CONFIG.MAX_CLIENTS then
+        -- Check if this is a sequential port from the same IP
+        local isSequentialPort = false
+        if networkManager.lastPortPerIP[clientIp] then
+            local lastPort = networkManager.lastPortPerIP[clientIp]
+            isSequentialPort = (clientPort == lastPort + 1)
+        end
+
+        if networkManager.processedConnections[clientPort] == clientPort then
+            print(string.format("[DEBUG] Duplicate connection from %s:%d. Closing client.", clientIp, clientPort))
+            client:close()
+        elseif #networkManager.connections >= CONFIG.MAX_CLIENTS * 2 then
+            -- Multiply MAX_CLIENTS by 2 since each client needs two ports
             print(string.format("[NetworkManager] Rejecting connection from %s:%d (Server full)", clientIp, clientPort))
             pcall(function()
                 client:send("SERVER_FULL\n")
@@ -166,13 +176,17 @@ function networkManager.acceptNewConnections()
                 ip = clientIp,
                 port = clientPort
             })
-        elseif networkManager.processedConnections[clientPort] == clientPort then
-            print(string.format("[DEBUG] Duplicate connection from %s:%d. Closing client.", clientIp, clientPort))
-            client:close()
+
+            local statusChannel = lovr.thread.getChannel('networkStatus')
+            statusChannel:push("SERVER_FULL")
+            break
         else
-            -- Register the connection
-            networkManager.clientCounter = networkManager.clientCounter + 1
+            -- Register the new connection
+            networkManager.clientCounter = isSequentialPort and networkManager.clientCounter or (networkManager.clientCounter + 1)
             local clientId = string.format("Client_%d_%s", networkManager.clientCounter, os.date("%Y%m%d%H%M%S"))
+
+            -- Calculate real total connections (counting pairs as one)
+            local realTotalConnections = math.ceil(#networkManager.connections / 2) + (isSequentialPort and 0 or 1)
 
             -- Log the new connection
             enhancedLog("INFO", "New Client Connected", {
@@ -180,7 +194,8 @@ function networkManager.acceptNewConnections()
                 ip = clientIp,
                 port = clientPort,
                 uniqueId = uniqueId,
-                total_connections = #networkManager.connections + 1
+                total_connections = realTotalConnections,
+                is_sequential = isSequentialPort
             })
 
             -- Store the connection
@@ -190,11 +205,15 @@ function networkManager.acceptNewConnections()
                 port = clientPort,
                 id = clientId,
                 uniqueId = uniqueId,
-                connected_at = os.time()
+                connected_at = os.time(),
+                is_sequential = isSequentialPort
             })
 
-            -- Mark this IP as processed
-            networkManager.processedConnections[clientIp] = true
+            -- Update last port for this IP
+            networkManager.lastPortPerIP[clientIp] = clientPort
+
+            -- Mark this port as processed
+            networkManager.processedConnections[clientPort] = clientPort
             lastAcceptedClient = false
         end
     end
@@ -286,6 +305,19 @@ function networkManager.connectToServer(host)
 
     local success, err = networkManager.client:connect(host, CONFIG.SERVER_PORT)
     if success then
+        -- Wait briefly for server full response
+        local response, err = networkManager.client:receive("*l")
+        if response == "SERVER_FULL" then
+            networkManager.client:close()
+            networkManager.client = nil
+
+            -- Push status to channel
+            local statusChannel = lovr.thread.getChannel('networkStatus')
+            statusChannel:push("SERVER_FULL")
+
+            return false, "Server is full"
+        end
+
         local statusChannel = lovr.thread.getChannel('networkStatus')
         local paramsChannel = lovr.thread.getChannel('connectionParams')
 
@@ -320,6 +352,27 @@ function networkManager.broadcast(message)
 end
 
 
+function networkManager.cleanupClientConnections(clientIp)
+    -- Clean up lastPortPerIP entry
+    networkManager.lastPortPerIP[clientIp] = nil
+
+    -- Clean up all processed ports for this IP
+    for port, _ in pairs(networkManager.processedConnections) do
+        -- Find all ports that belong to connections with this IP
+        for i, conn in ipairs(networkManager.connections) do
+            if conn.ip == clientIp and conn.port == port then
+                networkManager.processedConnections[port] = nil
+                break
+            end
+        end
+    end
+
+    enhancedLog("INFO", "Cleaned up connection tracking for client", {
+        ip = clientIp
+    })
+end
+
+
 function networkManager.pollConnections()
     for i = #networkManager.connections, 1, -1 do
         local conn = networkManager.connections[i]
@@ -334,17 +387,20 @@ function networkManager.pollConnections()
                 connected_duration = os.time() - conn.connected_at
             })
 
+            -- Close the socket
+            pcall(function()
+                conn.socket:close()
+            end)
+
+            -- Clean up connection tracking for this client
+            networkManager.cleanupClientConnections(conn.ip)
+
             -- Remove the connection
             table.remove(networkManager.connections, i)
 
-            -- Allow reconnection by removing processed flag
-            if conn.uniqueId then
-                networkManager.processedConnections[conn.uniqueId] = nil
-            end
-
             -- Optional: Dynamically adjust max clients if enabled
             if CONFIG.ALLOW_DYNAMIC_SLOTS then
-                CONFIG.MAX_CLIENTS = math.max(2, #networkManager.connections + 1)
+                CONFIG.MAX_CLIENTS = math.max(2, math.ceil(#networkManager.connections / 2))
                 enhancedLog("INFO", "Dynamic Client Slot Adjustment", {
                     new_max_clients = CONFIG.MAX_CLIENTS
                 })
