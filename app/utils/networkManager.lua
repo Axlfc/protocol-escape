@@ -11,18 +11,56 @@ local CONFIG = {
     CLIENT_TIMEOUT = 5,
     MAX_MESSAGE_SIZE = 1024 * 10,
     MESSAGE_RATE_LIMIT = 100,
-    MAX_CLIENTS = 3,
-    ALLOW_DYNAMIC_SLOTS = true  -- New flag to enable dynamic slot management
+    MAX_CLIENTS = 2,  -- This refers to "pairs" of connections
+    ALLOW_DYNAMIC_SLOTS = true,
+    SLOT_CLEANUP_INTERVAL = 60  -- Cleanup interval in seconds
 }
 
--- State management
+-- Enhanced state management with slot tracking
 networkManager.server = nil
 networkManager.client = nil
 networkManager.isServer = false
 networkManager.connections = {}
 networkManager.callbacks = {}
-networkManager.messageCounters = {}  -- For rate limiting
+networkManager.messageCounters = {}
 networkManager.lastCleanup = os.time()
+networkManager.slots = {}
+
+
+local function initializeSlots()
+    networkManager.slots = {
+        available = {},    -- Available slot numbers
+        occupied = {},     -- Currently occupied slots
+        lastAssigned = 0,  -- Last assigned slot number
+        metadata = {}      -- Metadata for each slot (connection time, client info, etc.)
+    }
+
+    -- Initialize available slots
+    for i = 1, CONFIG.MAX_CLIENTS do
+        table.insert(networkManager.slots.available, i)
+    end
+end
+
+
+-- Get next available slot
+local function getNextAvailableSlot()
+    if #networkManager.slots.available > 0 then
+        return table.remove(networkManager.slots.available, 1)
+    end
+    return nil
+end
+
+
+-- Release slot back to pool
+local function releaseSlot(slotNumber)
+    if networkManager.slots.occupied[slotNumber] then
+        networkManager.slots.occupied[slotNumber] = nil
+        networkManager.slots.metadata[slotNumber] = nil
+        table.insert(networkManager.slots.available, slotNumber)
+        table.sort(networkManager.slots.available)  -- Keep slots ordered
+        enhancedLog("INFO", "Slot released", {slot = slotNumber})
+    end
+end
 
 
 -- Logging function with improved timestamps and context

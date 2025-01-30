@@ -1,6 +1,12 @@
 -- app/src/controllers/menuController.lua
 local networkManager = require 'app.utils.networkManager'
 
+if not networkManager then
+    print("[MenuController] Error: networkManager module failed to load")
+else
+    print("[MenuController] networkManager module loaded successfully")
+end
+
 local menuController = {}
 
 -- Configurable keybindings specifically for menu navigation
@@ -113,7 +119,16 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
             sceneManager.switchScene('multiplayerMenu')
         end
     elseif scene.name == 'pauseMenu' then
-        if option == "Resume" then
+        if option == "Quit" then
+            print("[MenuController] Handling quit option in pauseMenu")
+            if networkManager and type(networkManager.notifyServerDisconnect) == "function" then
+                print("[MenuController] Calling notifyServerDisconnect...")
+                networkManager.notifyServerDisconnect()
+            else
+                print("[MenuController] Error: notifyServerDisconnect function not found in networkManager")
+            end
+            lovr.event.quit()
+        elseif option == "Resume" then
             sceneManager.clearOverlayScene()
         elseif option == "Save" then
             sceneManager.saveGameState({ timestamp = os.time() })
@@ -121,8 +136,6 @@ function menuController.handleOptionSelected(option, scene, sceneManager)
         elseif option == "Back to Main Menu" then
             sceneManager.clearOverlayScene()
             sceneManager.switchScene('mainMenu')
-        elseif option == "Quit" then
-            lovr.event.quit()
         end
     else
         print(string.format("[MenuController] Unhandled option '%s' in scene '%s'", option, scene.name))

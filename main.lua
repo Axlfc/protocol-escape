@@ -35,6 +35,7 @@ function lovr.update(dt)
             print("[NetworkManager] Server full, switching client to multiplayerMenu")
             -- Change from joinGameMenu to multiplayerMenu
             if not networkManager.isServer then
+                print("DEBUG: Client can't enter, Server is Full, loading multiplayer Menu")
                 sceneManager.switchScene('multiplayerMenu')
             end
         elseif status == "DISCONNECTED" then
